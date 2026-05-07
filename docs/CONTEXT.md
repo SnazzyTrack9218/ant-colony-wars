@@ -38,7 +38,7 @@ The player never directly changes the world. Every action goes through a marker:
 
 | Marker | Input | Who Claims | Effect |
 |---|---|---|---|
-| **Dig Marker** | Left-click dirt tile | Worker | Digs tile → tunnel tile |
+| **Dig Marker** | Left-click any dirt tile | Worker | BFS from tunnel network to target; Dig Markers + DIG jobs queued for every tile along the shortest path |
 | **Gather Marker** | Left-click food source | Worker | Hauls food to storage |
 | **Room Plan Marker** | Click empty tunnel, choose type | Worker | Builds room over time |
 | **Rally Marker** | Right-click location | Soldier | Soldiers move there; engage enemies en route |
@@ -221,9 +221,9 @@ res://
 - All 20 placeholder PNGs in `assets/sprites/`
 - `scripts/core/game_manager.gd` — autoload; food signals; ant count tracking
 - `scripts/core/colony_state.gd` — food, max_food, ant_count, priorities dict
-- `scripts/core/job_queue.gd` — JobType enum, Job class, claim/release/complete/score
-- `scripts/ants/worker_ant.gd` — 4-state FSM (IDLE/MOVING/WORKING/IDLE_WANDER) + BFS
-- `scripts/main.gd` — world setup, tileset, input, worker spawning, food sources
+- `scripts/core/job_queue.gd` — plain int TYPE_DIG/TYPE_GATHER constants (not enum — inner-class enum causes circular parse failure), Job class, claim/release/complete/score
+- `scripts/ants/worker_ant.gd` — 4-state FSM (IDLE/MOVING/WORKING/IDLE_WANDER) + BFS; 5 starting workers; skips GATHER when food maxed; re-evaluates all jobs before re-adding food source
+- `scripts/main.gd` — world setup, tileset, input, worker spawning, food sources; auto-path dig (multi-source BFS from tunnel network to click target)
 - `scripts/ui/hud.gd` — food counter and worker count labels
 - `scenes/main/main.tscn` — root scene; TileMapLayer, Ants, markers, Camera2D, HUD
 - `scenes/ants/worker_ant.tscn` — worker ant node with Sprite2D
@@ -236,7 +236,7 @@ res://
 
 ## Systems Not Built Yet
 
-- Worker ant sprite assigned (Sprite2D has no texture yet — Phase 1 pending Godot import)
+- Worker ant real sprite (placeholder amber square renders via AssetLoader — Phase 8)
 - Priority Panel UI (Phase 2)
 - Full job score formula with danger/urgency terms (Phase 2)
 - Room placement (Room Plan Markers) (Phase 3)
@@ -266,3 +266,5 @@ res://
 13. **Hardcoding priority weights** — always read from `colony_state.priorities`.
 14. **Making rooms appear instantly** — rooms must be built by workers over time. No instant placement outside debug mode.
 15. **Calling `ant.move_to()` from outside the ant FSM** — movement decisions belong to the ant, not the caller.
+16. **Re-adding a persistent job before `_enter_idle()`** — if a gather job is re-added before the ant scores, the ant sees it at distance 0 and immediately re-claims it, starving all other job types. Always enter idle first, re-add the job one frame later.
+17. **Using inner-class enums that reference the outer class** — `class_name Foo` with `enum Bar` and `class Inner: var x: Foo.Bar` causes a GDScript circular parse failure. Use plain `const` integers instead.

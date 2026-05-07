@@ -23,14 +23,16 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 - [x] IDLE: score unclaimed jobs; claim best; transition to MOVING
 - [x] MOVING: step along path with tweens; unclaim if no path
 - [x] WORKING (DIG): wait dig_duration → change tile to tunnel → complete job
-- [x] WORKING (GATHER): add food → re-add gather job → IDLE
+- [x] WORKING (GATHER): add food → enter IDLE to re-score all jobs → re-add food job after 1 frame
 - [x] IDLE_WANDER: random neighbor walk → retry IDLE after delay
+- [x] Skip GATHER jobs when colony food is at max (`_valid_job_types()`)
+- [x] 5 starting workers (4 gather, 1+ available for digging)
 
 ### World & Main Scene ✓
 - [x] Create `scenes/main/main.tscn` — TileMapLayer, Ants, markers, Camera2D, HUD
 - [x] Create `scripts/main.gd` — world setup, tileset in code, food sources, input
 - [x] TileSet set up in code using AssetLoader (dirt, tunnel, stone, queen tiles)
-- [x] Left-click dirt tile → Dig Marker placed + DIG job added to queue
+- [x] Left-click dirt tile → BFS from existing tunnel network finds shortest path to target → Dig Markers + DIG jobs queued for every tile along path
 - [x] Cannot place Dig Marker on queen chamber tiles (protected set)
 - [x] Camera centered over queen chamber at startup
 
@@ -40,18 +42,19 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
 ### Still Needed Before Phase 1 is Done
 - [ ] Open Godot 4.6, import project — confirm no errors in FileSystem panel
-- [ ] Press F5 — confirm workers appear, move, dig
+- [ ] Press F5 — 5 workers appear, move autonomously
 - [ ] Click deep dirt tile — verify orange markers appear along full tunnel path to target
-- [ ] Ants dig path tiles one by one until target is reached
-- [ ] Idle worker auto-finds food, food counter increments
-- [ ] Food counter hits max → ants stop gathering and dig instead
+- [ ] Multiple free ants converge on dig path; tiles dug progressively
+- [ ] Food counter increments as workers gather
+- [ ] Fill food to max (200) → all ants switch to digging instead
 - [ ] No null-reference errors in Output
 
-### Known Gap to Fix
+### Bugs Fixed
 - [x] Worker ant Sprite2D — `_ready()` assigns `AssetLoader.get_ant_sprite("worker")`
-- [x] JobType enum circular reference — replaced with plain int constants
-- [x] Ants don't stop gathering when food full — filtered in `_valid_job_types()`
-- [x] Click-per-tile digging — replaced with auto-path dig (BFS from tunnel to target)
+- [x] `JobType` enum circular reference — inner class referencing outer class enum caused silent parse failure; replaced with plain int constants `TYPE_DIG = 0`, `TYPE_GATHER = 1`
+- [x] Ants always re-grabbed same food job — food job now re-added 1 frame after ant enters IDLE, giving it a chance to score dig jobs first
+- [x] Ants ignored dig jobs when food available — `_valid_job_types()` returns only `[TYPE_DIG]` when food is at max
+- [x] Click-per-tile digging — replaced with auto-path dig (multi-source BFS from whole tunnel network to target; all intermediate tiles queued)
 
 ---
 
@@ -89,3 +92,8 @@ Nothing blocked.
 - Design docs updated: CONTEXT.md, ROADMAP.md, AUTONOMY_DESIGN.md (2026-05-07)
 - Project pushed to GitHub: https://github.com/SnazzyTrack9218/ant-colony-wars (2026-05-07)
 - Phase 1 core scripts written: game_manager, colony_state, job_queue, worker_ant, main, hud (2026-05-07)
+- Fixed JobType enum circular reference crashing ant FSM (2026-05-07)
+- Fixed window size and camera (fullscreen 1280×720, zoom=1, world fits viewport) (2026-05-07)
+- Auto-path dig: click any dirt tile, BFS queues all tiles from tunnel to target (2026-05-07)
+- Ants skip gather when food maxed; re-evaluate jobs before re-adding food source (2026-05-07)
+- Bumped starting workers to 5 so dig jobs get coverage alongside food gathering (2026-05-07)

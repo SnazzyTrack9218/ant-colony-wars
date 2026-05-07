@@ -84,41 +84,43 @@ Build one phase at a time. Do not start the next phase until acceptance criteria
 **Goal:** A playable bare-bones colony driven by markers and a simple job queue. Player places markers; ants execute them autonomously.
 
 ### Design Summary
-The player is the colony brain. The player places Dig Markers on dirt tiles. Workers see the jobs in the queue, score them by distance and availability, claim the best one, pathfind to it, and dig. Workers also auto-seek food when idle. Nothing moves because the player told it to — everything moves because an ant scored and claimed a job.
+The player is the colony brain. The player clicks a dirt tile to mark a dig destination. The game traces the shortest path from the existing tunnel network to that tile and queues Dig Markers for every dirt tile along the route. Workers score all unclaimed jobs, claim the best one, pathfind to it, and dig. Workers auto-seek food when idle but stop gathering when food is maxed so they redirect effort to digging. Nothing moves because the player told it to — everything moves because an ant scored and claimed a job.
 
 ### Features
-- TileMap with `dirt_tile`, `tunnel_tile`, and `stone_tile` tile types
-- Left-click a dirt tile → Dig Marker placed (visual indicator + job added to queue)
-- `job_queue.gd` — stores pending jobs; ants claim, execute, and release jobs through this system
+- TileMap with `dirt_tile`, `tunnel_tile`, `stone_tile`, `queen` tile types (TileSet built in code via AssetLoader)
+- Left-click dirt tile → multi-source BFS from whole tunnel network → Dig Markers + DIG jobs for all tiles along shortest path to target
+- `job_queue.gd` — TYPE_DIG / TYPE_GATHER int constants, Job class, claim/release/complete/score
 - Worker ant scene with 4-state FSM: `IDLE → MOVING → WORKING → IDLE_WANDER`
-- Workers score available jobs by: `priority_weight + distance_score` (simplified — no danger score yet)
-- BFS pathfinding for worker navigation around walls
-- Worker picks up nearest unclaimed DIG job; if no jobs, wanders near queen
-- Food tiles on the surface: idle workers auto-score GATHER jobs and carry food back
-- `colony_state.gd` — holds food count and basic priority dictionary (all `normal` to start)
-- `game_manager.gd` — autoload, holds global state, emits signals on state change
-- HUD: food counter label
-- Queen Chamber tile type — cannot have Dig Markers placed on it
+- Workers score jobs: `priority_weight + (10 / (distance + 1))` — simplified, no danger score yet
+- BFS pathfinding for worker navigation; unreachable jobs released and skipped
+- 5 starting workers — 4 handle food, 1+ available for digging at all times
+- Workers skip GATHER jobs when food is at max; re-evaluate all jobs before re-adding food source (prevents ants from looping on food forever)
+- `colony_state.gd` — food count, max_food, priority dictionary
+- `game_manager.gd` — autoload, food/ant-count signals
+- HUD: food counter and worker count labels
+- Queen Chamber — 3×3 protected tiles; cannot be dug
+- Camera: zoom=1.0, entire 60×40 tile world fits in 1280×720 viewport
 
-### Files Likely Changed
+### Files Changed
 - `scenes/main/main.tscn` — root scene with TileMap
 - `scenes/ants/worker_ant.tscn` — worker ant scene
-- `scenes/ui/hud.tscn` — food counter label
+- `scenes/ui/hud.tscn` — food and worker count labels
 - `scripts/core/game_manager.gd` — autoload
 - `scripts/core/colony_state.gd` — food, priority dictionary
-- `scripts/core/job_queue.gd` — claim/release/score API
-- `scripts/ants/worker_ant.gd` — FSM + BFS + job scoring
-- `scripts/ui/hud.gd` — updates food label from signal
-- `project.godot` — add GameManager autoload
+- `scripts/core/job_queue.gd` — plain int constants, claim/release/score API
+- `scripts/ants/worker_ant.gd` — FSM + BFS + job scoring + gather re-evaluation
+- `scripts/ui/hud.gd` — updates labels from signals
+- `scripts/main.gd` — auto-path dig, world gen, food sources
+- `project.godot` — display settings, autoloads
+- `data/colony/colony_config.json` — 5 starting workers
 
 ### Test Checklist
-- [ ] Press F5 — no errors
-- [ ] Left-click a dirt tile → Dig Marker visual appears
-- [ ] Worker walks to the marker (navigates around walls if needed)
-- [ ] Tile becomes tunnel after ant arrives; marker disappears
-- [ ] Place 3 markers — worker(s) dig all 3 in sequence or parallel
-- [ ] Idle worker auto-walks to food tile and carries it back; food counter increments
-- [ ] Cannot place Dig Marker on Queen Chamber tile
+- [ ] Press F5 — no errors, 5 workers visible and moving
+- [ ] Workers autonomously walk to surface food tiles; food counter increments
+- [ ] Left-click a deep dirt tile → orange markers trace full path from tunnel to target
+- [ ] Ants dig path tiles outward from tunnel; markers clear as each tile finishes
+- [ ] Fill food to 200 → ants switch from gathering to digging
+- [ ] Cannot place Dig Marker on Queen Chamber tiles
 - [ ] No null-reference errors in Output
 
 ### Acceptance Criteria
