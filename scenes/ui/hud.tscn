@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/priority_panel.tscn" id="2_priority_panel"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -29,3 +30,5 @@ offset_bottom = 82.0
 text = "Left-click dirt to dig"
 theme_override_font_sizes/font_size = 13
 modulate = Color(0.8, 0.8, 0.8, 1)
+
+[node name="PriorityPanel" parent="." instance=ExtResource("2_priority_panel")]

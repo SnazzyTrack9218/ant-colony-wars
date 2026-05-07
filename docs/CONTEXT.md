@@ -214,6 +214,8 @@ res://
 
 ## Systems Already Built
 
+Phase 2 note: priority state, JSON-backed priority weights, scored jobs, emergency re-score, and the HUD Priority Panel are implemented. Godot validation is still needed.
+
 - `scripts/assets/asset_loader.gd` — AssetLoader autoload (placeholder fallback)
 - `data/ASSET_MANIFEST.json` — asset path registry
 - `tools/generate_placeholders.py` — generates all 20 placeholder PNGs
@@ -230,6 +232,8 @@ res://
 - `scenes/ui/hud.tscn` — CanvasLayer with food/ant labels
 - `data/ants/worker_config.json` — move_speed, dig_duration
 - `data/colony/colony_config.json` — world size, queen position, starting workers
+- `data/colony/priority_weights.json` - low/normal/high/emergency priority multipliers
+- `scripts/ui/priority_panel.gd` + `scenes/ui/priority_panel.tscn` - HUD priority controls for all 8 categories
 - All planning docs
 
 ---
@@ -237,8 +241,7 @@ res://
 ## Systems Not Built Yet
 
 - Worker ant real sprite (placeholder amber square renders via AssetLoader — Phase 8)
-- Priority Panel UI (Phase 2)
-- Full job score formula with danger/urgency terms (Phase 2)
+- Phase 2 Godot validation (Priority Panel display, button cycling, behavior checks)
 - Room placement (Room Plan Markers) (Phase 3)
 - Enemy spawning and combat (Phase 4)
 - Soldier ant FSM (Phase 4)

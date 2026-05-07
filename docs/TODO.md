@@ -9,6 +9,8 @@ Always read this file before starting any work session.
 
 Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
+Current implementation work has moved into Phase 2. Phase 1 still needs in-editor Godot validation.
+
 ### Core Systems ✓
 - [x] Create `scripts/core/game_manager.gd` — autoload; food signals; ant count tracking
 - [x] Create `scripts/core/colony_state.gd` — food, max_food, priorities dict
@@ -60,11 +62,20 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
 ## NEXT — Phase 2: Priority System & Job Score
 
-- [ ] Add priority level cycling (low/normal/high/emergency) to colony_state
-- [ ] Extend job_queue._score_job with danger, resource_urgency, solo_bonus terms
-- [ ] Create `scripts/ui/priority_panel.gd` + `scenes/ui/priority_panel.tscn`
-- [ ] Changing priority to `emergency` forces all ants to re-score on next tick
-- [ ] Create `data/colony/priority_weights.json`
+- [x] Add priority level cycling (low/normal/high/emergency) to colony_state
+- [x] Extend job_queue._score_job with danger, resource_urgency, solo_bonus terms
+- [x] Create `scripts/ui/priority_panel.gd` + `scenes/ui/priority_panel.tscn`
+- [x] Changing priority to `emergency` forces moving/wandering workers to re-score on next tick
+- [x] Create `data/colony/priority_weights.json`
+
+## NEXT - Phase 2 Validation
+
+- [ ] Open Godot 4.6, import project and confirm Priority Panel appears in top-right HUD
+- [ ] Press +/- buttons for each category and confirm levels cycle low/normal/high/emergency
+- [ ] Set food priority to high and confirm workers prefer GATHER over DIG
+- [ ] Set digging priority to emergency and confirm moving/wandering workers release lower-priority jobs and re-score
+- [ ] Confirm `colony_state.get_priority_weight("food")` reads from `data/colony/priority_weights.json`
+- [ ] No parse errors or null-reference errors in Output
 - [ ] Verify: set food priority to high → workers prefer GATHER over DIG
 
 ---
@@ -83,6 +94,13 @@ Nothing blocked.
   (job_queue.add_job has duplicate guard — should be safe)
 - AssetLoader fallback: workers should show amber placeholder if sprite file missing
 
+## NEEDS TESTING (Phase 2)
+
+- Priority Panel scene imports cleanly and appears inside HUD
+- Priority buttons update `GameManager.colony.priorities`
+- Emergency priority interruption does not leave duplicate or stuck claimed jobs
+- Scored jobs ignore unreachable targets with score 0
+
 ---
 
 ## DONE
@@ -97,3 +115,4 @@ Nothing blocked.
 - Auto-path dig: click any dirt tile, BFS queues all tiles from tunnel to target (2026-05-07)
 - Ants skip gather when food maxed; re-evaluate jobs before re-adding food source (2026-05-07)
 - Bumped starting workers to 5 so dig jobs get coverage alongside food gathering (2026-05-07)
+- Phase 2 priority state, job scoring, priority panel, and emergency re-score implementation added (2026-05-07)

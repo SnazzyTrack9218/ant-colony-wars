@@ -2,6 +2,14 @@
 
 Build one phase at a time. Do not start the next phase until acceptance criteria for the current phase pass.
 
+## Long-Term Design Commitments
+
+- The final game is multiplayer-first at the architecture level, even while single-player is built first.
+- Maps will be much larger than the current prototype world.
+- Worlds will be procedurally generated from deterministic seeds, similar to a Minecraft-style seed flow: the same seed must produce the same terrain, food distribution, chambers, obstacles, and starting colony positions on every machine.
+- Multiplayer must share only the seed plus validated player commands where possible; clients must never invent map state locally.
+- Large seeded maps require chunk-aware generation, deterministic pathfinding inputs, and performance budgets for many ants, rooms, jobs, and soldiers.
+
 ---
 
 ## Phase 0 — Project Setup ✓
@@ -146,6 +154,8 @@ The player is the colony brain. The player clicks a dirt tile to mark a dig dest
 
 **Goal:** Give the player meaningful colony-level control. Workers make smarter decisions based on priorities. The colony brain has real levers to pull.
 
+**Status:** Implementation started. Priority cycling, JSON priority weights, scored jobs, emergency re-score, and the HUD Priority Panel are in place. Godot editor/runtime validation is still required.
+
 ### Design Summary
 Phase 1 workers pick the nearest available job. Phase 2 workers pick the *best* job based on a score that includes colony priorities, distance, resource urgency, and whether the colony is undercovered in a job category. The player can change priorities from the HUD Priority Panel.
 
@@ -204,6 +214,10 @@ Phase 1 workers pick the nearest available job. Phase 2 workers pick the *best* 
 ### Design Summary
 The player never places a finished room. They place a Room Plan Marker in cleared tunnel space. This creates a BUILD job in the queue. Workers score the BUILD job like any other, claim it, deliver resources to the site, and the room materialises once the build cost is paid. Rooms then produce colony outputs on timers driven by JSON config.
 
+Additional planned room autonomy:
+- Queen egg laying: queen auto-produces eggs based on `nursery` and `food` priority, available nursery capacity, and current food supply
+- Adaptive nursery spawning: nursery hatch rate adjusts to current food surplus so the colony grows faster when food is abundant and slows down when food is scarce
+
 ### Features
 - Room Plan Marker: player opens menu, selects room type, clicks empty tunnel tile
 - BUILD job added to queue with `room_type`, `build_cost`, `location`
@@ -259,6 +273,9 @@ Soldiers are trained by the Barracks (Phase 3). They patrol near the queen by de
 
 ### Features
 - Soldier ant type with 4-state FSM: `IDLE → MOVING → FIGHTING → IDLE`
+- Threat response: soldiers auto-patrol high-value rooms such as Nursery, Food Storage, Soldier Barracks, and Queen Chamber based on `defense` priority
+- Soldier formations: high defense creates temporary guard lines at tunnel entrances and choke points
+- Raid AI: soldiers auto-retreat when low on HP, when the queen is threatened, or when raid priority drops below defense priority
 - Soldier IDLE behavior scales with defense priority:
   - `low`: soldiers only fight if directly attacked
   - `normal`: soldiers patrol within N tiles of queen; engage any enemy nearby
@@ -375,6 +392,49 @@ All upgrade levels and costs live in `data/upgrades/upgrades_config.json`.
 
 ---
 
+## Phase 5.5 — Advanced Colony AI & Seeded World Scale
+
+**Goal:** Make the colony feel self-organizing at large map scale before multiplayer multiplies the simulation load.
+
+### Features
+- Dynamic job clustering: ants group on nearby dig/build jobs to complete tunnels and rooms faster, with diminishing returns so every ant does not pile onto one tile
+- Emergency auto-escalation: low food, queen damage, or critical room damage temporarily raises the relevant priority to `emergency`, then restores the previous priority when the crisis ends
+- Path optimization: when `food` priority is high, the colony can automatically queue tunnel expansion toward known food sources without direct player tile-by-tile planning
+- Room auto-maintenance: when `repair` priority is above normal, workers automatically generate REPAIR jobs for damaged structures without requiring Repair Markers
+- Pheromone trails: high-traffic paths gain temporary movement speed bonuses, encouraging natural highways through the tunnel network
+- Seeded large map foundation: replace the fixed prototype world with deterministic procedural generation driven by a seed; terrain, food sources, stone bands, entrances, chambers, and player start locations must be reproducible from the same seed
+
+### Files Likely Changed
+- `scripts/core/world_generator.gd`
+- `scripts/core/job_clusterer.gd`
+- `scripts/core/colony_state.gd`
+- `scripts/core/job_queue.gd`
+- `scripts/core/pheromone_map.gd`
+- `data/world/world_generation_config.json`
+- `data/colony/automation_config.json`
+
+### Test Checklist
+- [ ] Same seed produces identical terrain and food layout after restart
+- [ ] Different seeds produce meaningfully different maps
+- [ ] Large map pathfinding remains responsive with many queued jobs
+- [ ] Nearby dig/build jobs attract small groups of workers without starving other jobs
+- [ ] Low food auto-escalates food priority and later restores the previous level
+- [ ] Damaged rooms generate repair jobs automatically when repair priority is high
+- [ ] Pheromone paths speed up repeated ant traffic without permanently breaking balance
+
+### Acceptance Criteria
+- Seeded world generation is deterministic and ready for local/online multiplayer
+- Advanced automation still flows through priorities, markers, and the job queue
+- No autonomous system directly mutates the world without a queued job or validated room/world rule
+- Performance remains stable on a map larger than the Phase 1 prototype
+
+### What NOT to Do in This Phase
+- Do not add online networking yet
+- Do not let auto-expansion ignore queen/room protection rules
+- Do not let emergency auto-escalation permanently overwrite player-set priorities
+
+---
+
 ## Phase 6 — Local Multiplayer Prototype
 
 **Goal:** Two colonies on one screen. Validate PvP mechanics before networking.
@@ -382,6 +442,8 @@ All upgrade levels and costs live in `data/upgrades/upgrades_config.json`.
 ### Features
 - Split-screen: Player 1 controls left colony, Player 2 controls right colony
 - Shared TileMap — both colonies dig in the same world
+- Shared seeded map: both colonies spawn into the same deterministic large map generated from the selected seed
+- Seed selection UI for local matches
 - Victory condition: destroy enemy queen
 - No networking — both players on same keyboard or controllers
 
@@ -416,6 +478,8 @@ All upgrade levels and costs live in `data/upgrades/upgrades_config.json`.
 ### Features
 - Godot high-level multiplayer (ENet)
 - Dedicated server mode (headless)
+- Server selects or validates the map seed and all clients generate the same large procedural map from that seed
+- Server remains authoritative over revealed map state, resource depletion, digging, room placement, combat, and all generated world mutations
 - Clients send command packets only: `place_marker`, `set_priority`, `approve_room_plan`, `send_raid`
 - Server validates and applies all state changes
 - Basic lobby: host game, join via IP

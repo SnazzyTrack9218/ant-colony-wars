@@ -15,6 +15,7 @@ var _state: State = State.IDLE
 var _current_job = null
 var _path: Array = []
 var _is_moving: bool = false
+var _move_tween: Tween
 
 # World references set by main.gd via setup()
 var _tile_map: TileMapLayer
@@ -50,7 +51,20 @@ func setup(
 	position = _tile_to_world(start_tile)
 	_load_config()
 	GameManager.register_ant()
+	GameManager.emergency_priority_set.connect(_on_emergency_priority_set)
 	_enter_idle()
+
+
+func _process(_delta: float) -> void:
+	if _current_job == null:
+		return
+	var category: String = _current_job.category
+	if GameManager.colony.priorities.get(category, "normal") == "emergency":
+		return
+	if not _any_other_emergency_priority():
+		return
+	if _state == State.MOVING or _state == State.IDLE_WANDER:
+		_interrupt_and_rescore()
 
 
 func _load_config() -> void:
@@ -87,7 +101,7 @@ func _try_claim_job() -> void:
 	if not is_instance_valid(_tile_map):
 		return
 	var job = GameManager.job_queue.claim_best_job(
-			_tile_pos, self, _valid_job_types())
+			_tile_pos, self, _valid_job_types(), Callable(self, "_get_job_distance"))
 	if job != null:
 		_current_job = job
 		_start_moving_to_job()
@@ -107,9 +121,12 @@ func _start_moving_to_job() -> void:
 		return
 	_path = _find_path(_tile_pos, _current_job.tile_pos)
 	if _path.is_empty():
-		GameManager.job_queue.release_job(_current_job.id)
-		_current_job = null
-		_start_wander()
+		if _can_work_current_job_from_here():
+			_start_working()
+		else:
+			GameManager.job_queue.release_job(_current_job.id)
+			_current_job = null
+			_start_wander()
 		return
 	_state = State.MOVING
 	_move_step()
@@ -146,9 +163,9 @@ func _move_step() -> void:
 	_is_moving = true
 	var next_tile: Vector2i = _path.pop_front()
 	_tile_pos = next_tile
-	var tween := create_tween()
-	tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
-	tween.tween_callback(_on_step_done)
+	_move_tween = create_tween()
+	_move_tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
+	_move_tween.tween_callback(_on_step_done)
 
 
 func _on_step_done() -> void:
@@ -201,6 +218,30 @@ func _do_gather() -> void:
 		GameManager.job_queue.add_job(JobQueue.TYPE_GATHER, food_tile)
 
 
+func _on_emergency_priority_set(_category: String) -> void:
+	if _state == State.IDLE:
+		_try_claim_job()
+
+
+func _any_other_emergency_priority() -> bool:
+	for category in GameManager.colony.priorities:
+		if GameManager.colony.priorities[category] != "emergency":
+			continue
+		if _current_job == null or category != _current_job.category:
+			return true
+	return false
+
+
+func _interrupt_and_rescore() -> void:
+	if is_instance_valid(_move_tween):
+		_move_tween.kill()
+	_is_moving = false
+	if _current_job != null:
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+	_enter_idle()
+
+
 # ── BFS pathfinding ───────────────────────────────────────────────────────────
 
 func _find_path(from: Vector2i, to: Vector2i) -> Array:
@@ -216,6 +257,28 @@ func _find_path(from: Vector2i, to: Vector2i) -> Array:
 	if targets.is_empty():
 		return []
 	return _bfs(from, targets)
+
+
+func _get_job_distance(job) -> int:
+	if _can_work_job_from_tile(job, _tile_pos):
+		return 0
+	var path := _find_path(_tile_pos, job.tile_pos)
+	if path.is_empty():
+		return -1
+	return path.size()
+
+
+func _can_work_current_job_from_here() -> bool:
+	return _current_job != null and _can_work_job_from_tile(_current_job, _tile_pos)
+
+
+func _can_work_job_from_tile(job, tile: Vector2i) -> bool:
+	match job.type:
+		JobQueue.TYPE_DIG:
+			return abs(job.tile_pos.x - tile.x) + abs(job.tile_pos.y - tile.y) == 1
+		JobQueue.TYPE_GATHER:
+			return job.tile_pos == tile
+	return false
 
 
 func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
