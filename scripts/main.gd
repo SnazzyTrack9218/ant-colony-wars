@@ -123,7 +123,7 @@ func _place_food_sources() -> void:
 	for i in range(4):
 		var food_pos := Vector2i(spacing + i * spacing, food_row)
 		_food_positions.append(food_pos)
-		GameManager.job_queue.add_job(JobQueue.JobType.GATHER, food_pos)
+		GameManager.job_queue.add_job(JobQueue.TYPE_GATHER, food_pos)
 		_spawn_food_visual(food_pos)
 
 
@@ -180,7 +180,7 @@ func _try_place_dig_marker(tile_pos: Vector2i) -> void:
 	if tile_pos in _dig_marker_nodes:
 		return
 	_add_dig_marker(tile_pos)
-	GameManager.job_queue.add_job(JobQueue.JobType.DIG, tile_pos)
+	GameManager.job_queue.add_job(JobQueue.TYPE_DIG, tile_pos)
 
 
 func _add_dig_marker(tile_pos: Vector2i) -> void:
@@ -199,7 +199,7 @@ func _remove_dig_marker(tile_pos: Vector2i) -> void:
 
 
 func _on_job_completed(job: JobQueue.Job) -> void:
-	if job.type == JobQueue.JobType.DIG:
+	if job.type == JobQueue.TYPE_DIG:
 		_remove_dig_marker(job.tile_pos)
 
 

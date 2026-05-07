@@ -1,7 +1,7 @@
 extends Node2D
 
 const TILE_SIZE: int = 16
-const WORKER_JOB_TYPES: Array = [JobQueue.JobType.DIG, JobQueue.JobType.GATHER]
+const WORKER_JOB_TYPES: Array = [JobQueue.TYPE_DIG, JobQueue.TYPE_GATHER]
 const DIRS: Array = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 enum State { IDLE, MOVING, WORKING, IDLE_WANDER }
@@ -12,7 +12,7 @@ var _dig_duration: float = 1.2
 
 # FSM
 var _state: State = State.IDLE
-var _current_job: JobQueue.Job = null
+var _current_job = null
 var _path: Array = []
 var _is_moving: bool = false
 
@@ -86,7 +86,7 @@ func _enter_idle() -> void:
 func _try_claim_job() -> void:
 	if not is_instance_valid(_tile_map):
 		return
-	var job: JobQueue.Job = GameManager.job_queue.claim_best_job(
+	var job = GameManager.job_queue.claim_best_job(
 			_tile_pos, self, WORKER_JOB_TYPES)
 	if job != null:
 		_current_job = job
@@ -112,7 +112,7 @@ func _start_moving_to_job() -> void:
 func _start_wander() -> void:
 	_state = State.IDLE_WANDER
 	var neighbors: Array = []
-	for dir: Vector2i in DIRS:
+	for dir in DIRS:
 		var n := _tile_pos + dir
 		if _is_traversable(n):
 			neighbors.append(n)
@@ -166,9 +166,9 @@ func _start_working() -> void:
 		return
 	_state = State.WORKING
 	match _current_job.type:
-		JobQueue.JobType.DIG:
+		JobQueue.TYPE_DIG:
 			_do_dig()
-		JobQueue.JobType.GATHER:
+		JobQueue.TYPE_GATHER:
 			_do_gather()
 
 
@@ -187,7 +187,7 @@ func _do_gather() -> void:
 	GameManager.add_food(1)
 	GameManager.job_queue.complete_job(_current_job.id)
 	# Re-add gather job so the source is persistent.
-	GameManager.job_queue.add_job(JobQueue.JobType.GATHER, food_tile)
+	GameManager.job_queue.add_job(JobQueue.TYPE_GATHER, food_tile)
 	_current_job = null
 	_enter_idle()
 
@@ -200,7 +200,7 @@ func _find_path(from: Vector2i, to: Vector2i) -> Array:
 		return _bfs(from, [to])
 	# Otherwise find traversable neighbors (DIG: reach adjacent tunnel).
 	var targets: Array = []
-	for dir: Vector2i in DIRS:
+	for dir in DIRS:
 		var n := to + dir
 		if _is_traversable(n):
 			targets.append(n)
@@ -211,7 +211,7 @@ func _find_path(from: Vector2i, to: Vector2i) -> Array:
 
 func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
 	var goal_set: Dictionary = {}
-	for g: Vector2i in goal_tiles:
+	for g in goal_tiles:
 		goal_set[g] = true
 	if from in goal_set:
 		return []  # Already at destination, no movement needed.
@@ -225,7 +225,7 @@ func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
 		if current in goal_set:
 			found = current
 			break
-		for dir: Vector2i in DIRS:
+		for dir in DIRS:
 			var neighbor := current + dir
 			if neighbor in came_from:
 				continue
@@ -238,7 +238,7 @@ func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
 		return []
 
 	var path: Array = []
-	var node: Vector2i = found
+	var node = found
 	while came_from[node] != null:
 		path.push_front(node)
 		node = came_from[node]
