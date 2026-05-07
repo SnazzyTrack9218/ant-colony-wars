@@ -113,7 +113,7 @@ func _start_wander() -> void:
 	_state = State.IDLE_WANDER
 	var neighbors: Array = []
 	for dir in DIRS:
-		var n := _tile_pos + dir
+		var n: Vector2i = _tile_pos + dir
 		if _is_traversable(n):
 			neighbors.append(n)
 	if neighbors.is_empty():
@@ -183,7 +183,7 @@ func _do_dig() -> void:
 
 
 func _do_gather() -> void:
-	var food_tile := _current_job.tile_pos
+	var food_tile: Vector2i = _current_job.tile_pos
 	GameManager.add_food(1)
 	GameManager.job_queue.complete_job(_current_job.id)
 	# Re-add gather job so the source is persistent.
@@ -201,7 +201,7 @@ func _find_path(from: Vector2i, to: Vector2i) -> Array:
 	# Otherwise find traversable neighbors (DIG: reach adjacent tunnel).
 	var targets: Array = []
 	for dir in DIRS:
-		var n := to + dir
+		var n: Vector2i = to + dir
 		if _is_traversable(n):
 			targets.append(n)
 	if targets.is_empty():
@@ -226,7 +226,7 @@ func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
 			found = current
 			break
 		for dir in DIRS:
-			var neighbor := current + dir
+			var neighbor: Vector2i = current + dir
 			if neighbor in came_from:
 				continue
 			if not _is_traversable(neighbor):
