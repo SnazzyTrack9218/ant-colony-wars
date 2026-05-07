@@ -182,9 +182,28 @@ Do not create subfolders inside sprite category folders.
 
 ---
 
+## Marker Visual Assets
+
+Markers are overlaid on the TileMap to show player intent. They are 2D sprites drawn on top of tiles.
+
+| Filename | Location | Size | Placeholder |
+|---|---|---|---|
+| `dig_marker.png` | `assets/sprites/ui/` | 16×16 | Bright orange X |
+| `gather_marker.png` | `assets/sprites/ui/` | 16×16 | Green arrow down |
+| `room_plan_marker.png` | `assets/sprites/ui/` | 64×64 | Blue blueprint rect |
+| `rally_marker.png` | `assets/sprites/ui/` | 16×16 | Yellow flag |
+| `raid_rally_marker.png` | `assets/sprites/ui/` | 16×16 | Red flag |
+| `repair_marker.png` | `assets/sprites/ui/` | 16×16 | Yellow wrench |
+| `emergency_marker.png` | `assets/sprites/ui/` | 16×16 | Red exclamation |
+
+These are added to `ASSET_MANIFEST.json` under the `"ui"` category when Phase 1 coding starts.
+For Phase 1 placeholder implementation, colored `ColorRect` nodes are acceptable instead of sprite files.
+
+---
+
 ## Keeping Assets Organized
 
-- One file per asset. No sprite sheets until animation is needed (Phase 7).
+- One file per asset. No sprite sheets until animation is needed (Phase 8).
 - No version suffixes. Replace the file directly.
 - No subfolders inside category folders.
 - When removing an asset: delete the file AND its manifest entry at the same time.
