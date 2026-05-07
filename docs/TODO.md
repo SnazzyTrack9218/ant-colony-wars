@@ -5,78 +5,72 @@ Always read this file before starting any work session.
 
 ---
 
-## NOW — Phase 1: Single-Player Colony Prototype
+## NOW — Phase 3: Ant Autonomy & World Quality
 
 Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
-Current implementation work has moved into Phase 2. Phase 1 still needs in-editor Godot validation.
+### Immediate Bugs to Fix
+- [ ] Ants still visually clip or appear to pass through walls — investigate tween position vs tile boundary alignment
+- [ ] Worker stuck in WORKING state when dest becomes unreachable mid-dig (another ant digs wrong direction) — add timeout/retry
 
-### Core Systems ✓
-- [x] Create `scripts/core/game_manager.gd` — autoload; food signals; ant count tracking
-- [x] Create `scripts/core/colony_state.gd` — food, max_food, priorities dict
-- [x] Create `scripts/core/job_queue.gd` — JobType, Job class, claim/release/complete/score
-- [x] Register `GameManager` as autoload in `project.godot`
-- [x] Create `data/ants/worker_config.json` — move_speed, dig_duration
-- [x] Create `data/colony/colony_config.json` — world size, queen pos, starting workers
-
-### Worker Ant ✓
-- [x] Create `scenes/ants/worker_ant.tscn` — Node2D + Sprite2D
-- [x] Create `scripts/ants/worker_ant.gd` — 4-state FSM + BFS pathfinding
-- [x] IDLE: score unclaimed jobs; claim best; transition to MOVING
-- [x] MOVING: step along path with tweens; unclaim if no path
-- [x] WORKING (DIG): wait dig_duration → change tile to tunnel → complete job
-- [x] WORKING (GATHER): add food → enter IDLE to re-score all jobs → re-add food job after 1 frame
-- [x] IDLE_WANDER: random neighbor walk → retry IDLE after delay
-- [x] Skip GATHER jobs when colony food is at max (`_valid_job_types()`)
-- [x] 5 starting workers (4 gather, 1+ available for digging)
-
-### World & Main Scene ✓
-- [x] Create `scenes/main/main.tscn` — TileMapLayer, Ants, markers, Camera2D, HUD
-- [x] Create `scripts/main.gd` — world setup, tileset in code, food sources, input
-- [x] TileSet set up in code using AssetLoader (dirt, tunnel, stone, queen tiles)
-- [x] Left-click dirt tile → BFS from existing tunnel network finds shortest path to target → Dig Markers + DIG jobs queued for every tile along path
-- [x] Cannot place Dig Marker on queen chamber tiles (protected set)
-- [x] Camera centered over queen chamber at startup
-
-### HUD ✓
-- [x] Create `scenes/ui/hud.tscn` — CanvasLayer with Food + Worker labels
-- [x] Create `scripts/ui/hud.gd` — connects to GameManager signals
-
-### Still Needed Before Phase 1 is Done
-- [ ] Open Godot 4.6, import project — confirm no errors in FileSystem panel
-- [ ] Press F5 — 5 workers appear, move autonomously
-- [ ] Click deep dirt tile — verify orange markers appear along full tunnel path to target
-- [ ] Multiple free ants converge on dig path; tiles dug progressively
-- [ ] Food counter increments as workers gather
-- [ ] Fill food to max (200) → all ants switch to digging instead
-- [ ] No null-reference errors in Output
-
-### Bugs Fixed
-- [x] Worker ant Sprite2D — `_ready()` assigns `AssetLoader.get_ant_sprite("worker")`
-- [x] `JobType` enum circular reference — inner class referencing outer class enum caused silent parse failure; replaced with plain int constants `TYPE_DIG = 0`, `TYPE_GATHER = 1`
-- [x] Ants always re-grabbed same food job — food job now re-added 1 frame after ant enters IDLE, giving it a chance to score dig jobs first
-- [x] Ants ignored dig jobs when food available — `_valid_job_types()` returns only `[TYPE_DIG]` when food is at max
-- [x] Click-per-tile digging — replaced with auto-path dig (multi-source BFS from whole tunnel network to target; all intermediate tiles queued)
+### Phase 3 Tasks
+- [ ] **Auto-explore**: idle workers with no jobs wander to unexplored areas and extend tunnel network organically
+- [ ] **Auto-gather**: workers automatically seek nearby food sources without explicit markers (food sources discovered during exploration)
+- [ ] **Procedural food**: remove static food sources; replace with randomly placed food items generated at world-gen time
+- [ ] **World gen v2**: replace hand-coded layout with procedural generator (random rock formations, stone veins, cave pockets)
+- [ ] **Bigger world**: increase to 120×80 tiles; verify camera/zoom still covers it or add scrolling
+- [ ] **Chunk-dirty tracking**: only re-score jobs near tiles that actually changed (performance prep for large worlds)
+- [ ] **Worker sprite animation**: placeholder is static amber square — add basic 2-frame walk cycle using AssetLoader
 
 ---
 
-## NEXT — Phase 2: Priority System & Job Score
+## NEXT — Phase 4: Main Menu & Settings
 
-- [x] Add priority level cycling (low/normal/high/emergency) to colony_state
-- [x] Extend job_queue._score_job with danger, resource_urgency, solo_bonus terms
-- [x] Create `scripts/ui/priority_panel.gd` + `scenes/ui/priority_panel.tscn`
-- [x] Changing priority to `emergency` forces moving/wandering workers to re-score on next tick
-- [x] Create `data/colony/priority_weights.json`
+- [ ] Main menu scene (`scenes/ui/main_menu.tscn`) — New Game, Settings, Quit
+- [ ] Settings panel — master volume, SFX volume, music volume, resolution, fullscreen toggle
+- [ ] Keybinds panel — rebindable actions stored in `data/settings/keybinds.json`
+- [ ] SFX hooks: dig complete, food gathered, ant spawned, queen damaged
+- [ ] Background music: loop track, crossfade between peace/alert states
+- [ ] Save/load settings to `user://settings.json`
+- [ ] Compact in-game HUD: collapse priority panel to icons, show on hover/toggle
+- [ ] Visual feedback on marker placement (flash, sound, particle)
+- [ ] `scripts/core/audio_manager.gd` autoload — plays/stops sounds; never load audio inline
 
-## NEXT - Phase 2 Validation
+---
 
-- [ ] Open Godot 4.6, import project and confirm Priority Panel appears in top-right HUD
-- [ ] Press +/- buttons for each category and confirm levels cycle low/normal/high/emergency
-- [ ] Set food priority to high and confirm workers prefer GATHER over DIG
-- [ ] Set digging priority to emergency and confirm moving/wandering workers release lower-priority jobs and re-score
-- [ ] Confirm `colony_state.get_priority_weight("food")` reads from `data/colony/priority_weights.json`
-- [ ] No parse errors or null-reference errors in Output
-- [ ] Verify: set food priority to high → workers prefer GATHER over DIG
+## NEXT — Phase 5: Rooms & Colony Growth
+
+- [ ] Room Plan Marker: player opens menu, selects type, places blueprint in empty tunnel
+- [ ] BUILD job type added to job_queue
+- [ ] Worker BUILD state: path to site, deliver 1 food per trip, progress bar
+- [ ] Room appears when build_cost paid
+- [ ] 6 room types with `data/rooms/*_config.json`: Queen Chamber, Nursery, Food Storage, Barracks, Mushroom Farm, Guard Post
+- [ ] Nursery timer → hatch egg → `GameManager.spawn_worker()`
+- [ ] Food Storage raises `colony_state.max_food`
+- [ ] `scripts/core/room_manager.gd` tracks placed/under-construction rooms
+
+---
+
+## NEXT — Phase 6: Combat & Enemies
+
+- [ ] Spider enemy: spawns from world edges on timer, walks toward queen
+- [ ] Beetle enemy: slower, higher HP
+- [ ] Soldier ant FSM: IDLE_PATROL → ENGAGE → RETURN
+- [ ] Soldier auto-engages enemies within detection radius based on `defense` priority
+- [ ] Rally Marker (right-click): soldiers path to it and hold position
+- [ ] HP bars on ants and enemies
+- [ ] Queen death → game over screen
+- [ ] `scripts/core/enemy_spawner.gd` + `data/enemies/*_config.json`
+
+---
+
+## MULTIPLAYER PREP (woven into all phases)
+
+- [ ] All game-state mutations go through `GameManager` command functions (no direct node mutation from UI)
+- [ ] Every command is serializable: `place_marker(type, pos)`, `set_priority(cat, level)`, `cancel_marker(id)`
+- [ ] World state snapshotable to Dictionary for future RPC sync
+- [ ] Tile changes go through a `WorldState` layer, not directly via `_tile_map.set_cell`
+- [ ] No hardcoded player index — `colony_id` param on all colony-specific calls
 
 ---
 
@@ -86,20 +80,14 @@ Nothing blocked.
 
 ---
 
-## NEEDS TESTING (Phase 1)
+## NEEDS TESTING
 
-- Worker FSM: does it get stuck if all jobs are claimed?
-- BFS: unreachable tile — does worker gracefully wander instead of looping?
-- Gather job re-add: is it duplicated if two workers finish gather at same time?
-  (job_queue.add_job has duplicate guard — should be safe)
-- AssetLoader fallback: workers should show amber placeholder if sprite file missing
-
-## NEEDS TESTING (Phase 2)
-
-- Priority Panel scene imports cleanly and appears inside HUD
-- Priority buttons update `GameManager.colony.priorities`
-- Emergency priority interruption does not leave duplicate or stuck claimed jobs
-- Scored jobs ignore unreachable targets with score 0
+- Dig destination: place marker deep in dirt → ant digs autonomously, no pre-queued path tiles
+- Multiple dig markers placed → multiple ants each own one destination
+- `_find_next_dig_tile` correctness when tunnel has branches
+- Emergency priority: ant in MOVING state releases job and re-scores within one process tick
+- Priority panel: +/- buttons cycle all 8 categories cleanly
+- Food max: ants switch to digging when food = 200
 
 ---
 
@@ -107,12 +95,13 @@ Nothing blocked.
 
 - Phase 0 setup files created (2026-05-07)
 - Phase 0.5 asset pipeline and placeholder generator complete (2026-05-07)
-- Design docs updated: CONTEXT.md, ROADMAP.md, AUTONOMY_DESIGN.md (2026-05-07)
-- Project pushed to GitHub: https://github.com/SnazzyTrack9218/ant-colony-wars (2026-05-07)
-- Phase 1 core scripts written: game_manager, colony_state, job_queue, worker_ant, main, hud (2026-05-07)
+- Design docs: CONTEXT.md, ROADMAP.md, AUTONOMY_DESIGN.md (2026-05-07)
+- Project on GitHub: https://github.com/SnazzyTrack9218/ant-colony-wars (2026-05-07)
+- Phase 1: game_manager, colony_state, job_queue, worker_ant, main, hud (2026-05-07)
 - Fixed JobType enum circular reference crashing ant FSM (2026-05-07)
-- Fixed window size and camera (fullscreen 1280×720, zoom=1, world fits viewport) (2026-05-07)
-- Auto-path dig: click any dirt tile, BFS queues all tiles from tunnel to target (2026-05-07)
-- Ants skip gather when food maxed; re-evaluate jobs before re-adding food source (2026-05-07)
-- Bumped starting workers to 5 so dig jobs get coverage alongside food gathering (2026-05-07)
-- Phase 2 priority state, job scoring, priority panel, and emergency re-score implementation added (2026-05-07)
+- Fixed window size and camera: fullscreen 1280×720, zoom=1 (2026-05-07)
+- Bumped starting workers to 5 (2026-05-07)
+- Ants skip gather when food maxed; re-evaluate before re-adding food job (2026-05-07)
+- Phase 2: priority system, full 5-term job score, emergency re-score, priority panel (2026-05-07)
+- Dig redesign: single destination marker, ant self-navigates and digs autonomously (2026-05-07)
+- Removed pre-path BFS from main.gd; adjacency check prevents remote mining (2026-05-07)
