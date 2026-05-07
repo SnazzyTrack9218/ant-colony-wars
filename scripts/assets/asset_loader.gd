@@ -38,24 +38,24 @@ func _ready() -> void:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-func get_ant_sprite(name: String) -> Texture2D:
-	return _get_texture("ants", name)
+func get_ant_sprite(asset_name: String) -> Texture2D:
+	return _get_texture("ants", asset_name)
 
 
-func get_room_sprite(name: String) -> Texture2D:
-	return _get_texture("rooms", name)
+func get_room_sprite(asset_name: String) -> Texture2D:
+	return _get_texture("rooms", asset_name)
 
 
-func get_enemy_sprite(name: String) -> Texture2D:
-	return _get_texture("enemies", name)
+func get_enemy_sprite(asset_name: String) -> Texture2D:
+	return _get_texture("enemies", asset_name)
 
 
-func get_tile_sprite(name: String) -> Texture2D:
-	return _get_texture("tiles", name)
+func get_tile_sprite(asset_name: String) -> Texture2D:
+	return _get_texture("tiles", asset_name)
 
 
-func get_ui_icon(name: String) -> Texture2D:
-	return _get_texture("ui", name)
+func get_ui_icon(asset_name: String) -> Texture2D:
+	return _get_texture("ui", asset_name)
 
 
 ## Call this during development to hot-reload changed art without restarting.
@@ -91,7 +91,7 @@ func _load_manifest() -> void:
 	print("AssetLoader: manifest loaded (%d categories)." % _manifest.size())
 
 
-func _get_texture(category: String, name: String) -> Texture2D:
+func _get_texture(category: String, asset_name: String) -> Texture2D:
 	if _manifest.is_empty():
 		return _make_placeholder(category)
 
@@ -100,22 +100,22 @@ func _get_texture(category: String, name: String) -> Texture2D:
 		push_warning("AssetLoader: Unknown category '%s'." % category)
 		return _make_placeholder(category)
 
-	var path: String = category_map.get(name, "")
-	if path.is_empty():
-		push_warning("AssetLoader: No manifest entry for '%s/%s'." % [category, name])
+	var asset_path: String = category_map.get(asset_name, "")
+	if asset_path.is_empty():
+		push_warning("AssetLoader: No manifest entry for '%s/%s'." % [category, asset_name])
 		return _make_placeholder(category)
 
-	var cache_key: String = category + "/" + name
+	var cache_key: String = category + "/" + asset_name
 	if _texture_cache.has(cache_key):
 		return _texture_cache[cache_key]
 
-	if not ResourceLoader.exists(path):
-		push_warning("AssetLoader: Missing file '%s' — placeholder used for %s/%s." % [path, category, name])
+	if not ResourceLoader.exists(asset_path):
+		push_warning("AssetLoader: Missing file '%s' — placeholder used for %s/%s." % [asset_path, category, asset_name])
 		return _make_placeholder(category)
 
-	var tex := load(path) as Texture2D
+	var tex := load(asset_path) as Texture2D
 	if tex == null:
-		push_warning("AssetLoader: '%s' loaded but is not a Texture2D — placeholder used." % path)
+		push_warning("AssetLoader: '%s' loaded but is not a Texture2D — placeholder used." % asset_path)
 		return _make_placeholder(category)
 
 	_texture_cache[cache_key] = tex

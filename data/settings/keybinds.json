@@ -1,0 +1,7 @@
+{
+    "camera_up": "W",
+    "camera_down": "S",
+    "camera_left": "A",
+    "camera_right": "D",
+    "place_dig_marker": "MouseLeft"
+}

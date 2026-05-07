@@ -1,0 +1,19 @@
+{
+    "world_seed": 12345,
+    "stone_vein_count": 24,
+    "stone_vein_min_length": 6,
+    "stone_vein_max_length": 22,
+    "cave_pocket_count": 14,
+    "cave_pocket_min_radius": 2,
+    "cave_pocket_max_radius": 5,
+    "queen_safe_radius": 9,
+    "starting_surface_shaft": false,
+    "starting_hall_half_width": 5,
+    "food_source_min_count": 5,
+    "food_source_max_count": 12,
+    "food_min_depth": 8,
+    "food_max_depth_padding": 8,
+    "food_min_horizontal_distance": 10,
+    "food_max_horizontal_distance": 34,
+    "food_dirt_padding_radius": 1
+}

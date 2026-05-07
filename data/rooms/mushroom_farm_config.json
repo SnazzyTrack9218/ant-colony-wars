@@ -1,0 +1,8 @@
+{
+    "display_name": "Mushroom Farm",
+    "build_cost": 14,
+    "build_food_per_tick": 1,
+    "food_interval": 12.0,
+    "food_amount": 2,
+    "placeable": true
+}

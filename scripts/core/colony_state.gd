@@ -9,6 +9,8 @@ const PRIORITY_ORDER: Array[String] = ["low", "normal", "high", "emergency"]
 var food: int = 0
 var max_food: int = 200
 var ant_count: int = 0
+var queen_hp: int = 100
+var queen_max_hp: int = 100
 var _priority_weights: Dictionary = {}
 
 var priorities: Dictionary = {
@@ -28,11 +30,11 @@ func _ready() -> void:
 
 
 func _load_priority_weights() -> void:
-	var path := "res://data/colony/priority_weights.json"
-	if not FileAccess.file_exists(path):
+	var config_path := "res://data/colony/priority_weights.json"
+	if not FileAccess.file_exists(config_path):
 		_priority_weights = {"low": 0.5, "normal": 1.0, "high": 1.5, "emergency": 2.5}
 		return
-	var file := FileAccess.open(path, FileAccess.READ)
+	var file := FileAccess.open(config_path, FileAccess.READ)
 	if file == null:
 		_priority_weights = {"low": 0.5, "normal": 1.0, "high": 1.5, "emergency": 2.5}
 		return

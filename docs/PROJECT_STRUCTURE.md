@@ -47,12 +47,12 @@ res://
 │   └── enemies/               <- spider_config.json, beetle_config.json, etc.
 │
 └── docs/                      <- Planning and reference documents
-    ├── ROADMAP.md             <- Phase-by-phase development plan
-    ├── CONTEXT.md             <- Living context doc for AI agents and developers
-    ├── ASSET_GUIDE.md         <- How to add and name assets
-    ├── PLACEHOLDER_ASSETS.md  <- How the placeholder fallback system works
-    ├── PROJECT_STRUCTURE.md   <- This file
-    └── TODO.md                <- Current task board
+	├── ROADMAP.md             <- Phase-by-phase development plan
+	├── CONTEXT.md             <- Living context doc for AI agents and developers
+	├── ASSET_GUIDE.md         <- How to add and name assets
+	├── PLACEHOLDER_ASSETS.md  <- How the placeholder fallback system works
+	├── PROJECT_STRUCTURE.md   <- This file
+	└── TODO.md                <- Current task board
 ```
 
 ---

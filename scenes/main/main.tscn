@@ -17,6 +17,12 @@ z_index = 1
 [node name="FoodMarkers" type="Node2D" parent="."]
 z_index = 1
 
+[node name="RoomPlans" type="Node2D" parent="."]
+z_index = 3
+
+[node name="Rooms" type="Node2D" parent="."]
+z_index = 2
+
 [node name="Camera2D" type="Camera2D" parent="."]
 zoom = Vector2(1, 1)
 

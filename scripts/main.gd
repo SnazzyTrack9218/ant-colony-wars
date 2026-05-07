@@ -2,6 +2,14 @@ extends Node2D
 
 const TILE_SIZE: int = 16
 const WorkerAntScene: PackedScene = preload("res://scenes/ants/worker_ant.tscn")
+const WorldGeneratorScript: GDScript = preload("res://scripts/core/world_generator.gd")
+const ROOM_TYPE_ORDER: Array[String] = [
+	"nursery",
+	"food_storage",
+	"mushroom_farm",
+	"guard_post",
+	"soldier_barracks",
+]
 
 # World dimensions and layout — all read from colony_config.json at startup.
 var _world_w: int = 60
@@ -10,6 +18,13 @@ var _surface_row: int = 5
 var _queen_col: int = 30
 var _queen_row: int = 27
 var _starting_workers: int = 3
+var _camera_zoom: float = 1.0
+var _camera_min_zoom: float = 0.45
+var _camera_max_zoom: float = 2.25
+var _camera_zoom_step: float = 0.12
+var _camera_move_speed: float = 520.0
+var _selected_room_index: int = 0
+var _selected_room_type: String = "nursery"
 
 # Tile source IDs assigned by Godot when sources are added to the TileSet.
 var _sid: Dictionary = {}  # "dirt" | "tunnel" | "stone" | "queen" -> int
@@ -18,36 +33,47 @@ var _sid: Dictionary = {}  # "dirt" | "tunnel" | "stone" | "queen" -> int
 var _protected: Dictionary = {}  # Vector2i -> true
 
 # Active dig marker visuals.
-var _dig_marker_nodes: Dictionary = {}  # Vector2i -> ColorRect
+var _dig_marker_nodes: Dictionary = {}  # Vector2i -> Control
+var _room_plan_nodes: Dictionary = {}  # plan_id -> Control
+var _room_nodes: Dictionary = {}  # plan_id -> Node2D
 
-# Food source positions (sky area, always traversable).
+# Food source positions generated inside reachable underground pockets.
 var _food_positions: Array = []
 
 @onready var _tile_map: TileMapLayer = $TileMapLayer
 @onready var _ants_root: Node2D = $Ants
 @onready var _dig_markers_root: Node2D = $DigMarkers
 @onready var _food_markers_root: Node2D = $FoodMarkers
+@onready var _room_plans_root: Node2D = $RoomPlans
+@onready var _rooms_root: Node2D = $Rooms
 @onready var _camera: Camera2D = $Camera2D
 
 
 func _ready() -> void:
 	_load_config()
+	_load_camera_config()
 	_setup_tileset()
 	_build_world()
 	_place_food_sources()
 	_spawn_starting_workers()
 	_center_camera()
+	AudioManager.play_music_mode("peace")
+	_connect_room_manager()
 	GameManager.job_queue.job_completed.connect(_on_job_completed)
 	print("Main: world ready. %d×%d tiles." % [_world_w, _world_h])
+
+
+func _process(delta: float) -> void:
+	_update_camera_movement(delta)
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 func _load_config() -> void:
-	var path := "res://data/colony/colony_config.json"
-	if not FileAccess.file_exists(path):
+	var config_path := "res://data/colony/colony_config.json"
+	if not FileAccess.file_exists(config_path):
 		return
-	var file := FileAccess.open(path, FileAccess.READ)
+	var file := FileAccess.open(config_path, FileAccess.READ)
 	if file == null:
 		return
 	var data = JSON.parse_string(file.get_as_text())
@@ -61,6 +87,34 @@ func _load_config() -> void:
 	_queen_row = int(data.get("queen_row", _queen_row))
 	_starting_workers = int(data.get("starting_workers", _starting_workers))
 	GameManager.colony.max_food = int(data.get("max_food", GameManager.colony.max_food))
+	GameManager.colony.food = clampi(
+			int(data.get("starting_food", GameManager.colony.food)),
+			0,
+			GameManager.colony.max_food)
+	GameManager.colony.queen_max_hp = int(data.get("queen_max_hp", GameManager.colony.queen_max_hp))
+	GameManager.colony.queen_hp = clampi(
+			int(data.get("queen_hp", GameManager.colony.queen_max_hp)),
+			0,
+			GameManager.colony.queen_max_hp)
+	GameManager.food_changed.emit(GameManager.colony.food)
+
+
+func _load_camera_config() -> void:
+	var config_path := "res://data/camera/camera_config.json"
+	if not FileAccess.file_exists(config_path):
+		return
+	var file := FileAccess.open(config_path, FileAccess.READ)
+	if file == null:
+		return
+	var data = JSON.parse_string(file.get_as_text())
+	file.close()
+	if data == null:
+		return
+	_camera_zoom = maxf(0.1, float(data.get("camera_zoom", _camera_zoom)))
+	_camera_min_zoom = maxf(0.1, float(data.get("min_zoom", _camera_min_zoom)))
+	_camera_max_zoom = maxf(_camera_min_zoom, float(data.get("max_zoom", _camera_max_zoom)))
+	_camera_zoom_step = maxf(0.01, float(data.get("zoom_step", _camera_zoom_step)))
+	_camera_move_speed = maxf(0.0, float(data.get("move_speed", _camera_move_speed)))
 
 
 # ── Tileset setup ─────────────────────────────────────────────────────────────
@@ -96,35 +150,38 @@ func _make_color_tile(color: Color) -> ImageTexture:
 # ── World generation ──────────────────────────────────────────────────────────
 
 func _build_world() -> void:
-	# Fill underground with dirt.
-	for y in range(_surface_row, _world_h):
-		for x in range(_world_w):
-			_tile_map.set_cell(Vector2i(x, y), _sid["dirt"], Vector2i(0, 0))
+	_tile_map.clear()
+	_protected.clear()
+	_food_positions.clear()
 
-	# Vertical access shaft from surface to queen area.
-	for y in range(_surface_row, _queen_row):
-		_tile_map.set_cell(Vector2i(_queen_col, y), _sid["tunnel"], Vector2i(0, 0))
+	var generator: WorldGenerator = WorldGeneratorScript.new()
+	var world_data: Dictionary = generator.generate(
+			_world_w,
+			_world_h,
+			_surface_row,
+			_queen_col,
+			_queen_row)
+	_apply_generated_world(world_data)
 
-	# Horizontal starting corridor just above queen chamber.
-	for x in range(_queen_col - 5, _queen_col + 6):
-		_tile_map.set_cell(Vector2i(x, _queen_row - 1), _sid["tunnel"], Vector2i(0, 0))
 
-	# Queen chamber — 3×3 protected tiles.
-	for dy in range(3):
-		for dx in range(3):
-			var pos := Vector2i(_queen_col - 1 + dx, _queen_row + dy)
-			_tile_map.set_cell(pos, _sid["queen"], Vector2i(0, 0))
-			_protected[pos] = true
+func _apply_generated_world(world_data: Dictionary) -> void:
+	for tile_pos in world_data.get("dirt_tiles", []):
+		_tile_map.set_cell(Vector2i(tile_pos), _sid["dirt"], Vector2i(0, 0))
+	for tile_pos in world_data.get("stone_tiles", []):
+		_tile_map.set_cell(Vector2i(tile_pos), _sid["stone"], Vector2i(0, 0))
+	for tile_pos in world_data.get("tunnel_tiles", []):
+		_tile_map.set_cell(Vector2i(tile_pos), _sid["tunnel"], Vector2i(0, 0))
+	for tile_pos in world_data.get("queen_tiles", []):
+		_tile_map.set_cell(Vector2i(tile_pos), _sid["queen"], Vector2i(0, 0))
+	for tile_pos in world_data.get("protected_tiles", []):
+		_protected[Vector2i(tile_pos)] = true
+	for food_pos in world_data.get("food_positions", []):
+		_food_positions.append(Vector2i(food_pos))
 
 
 func _place_food_sources() -> void:
-	var food_row := _surface_row - 3  # Rows above ground are open sky.
-	var spacing: int = _world_w / 5
-	for i in range(4):
-		var food_pos := Vector2i(spacing + i * spacing, food_row)
-		_food_positions.append(food_pos)
-		GameManager.job_queue.add_job(JobQueue.TYPE_GATHER, food_pos)
-		_spawn_food_visual(food_pos)
+	for food_pos in _food_positions:
+		_spawn_food_visual(Vector2i(food_pos))
 
 
 func _spawn_food_visual(tile_pos: Vector2i) -> void:
@@ -150,20 +207,47 @@ func _spawn_worker(tile_pos: Vector2i) -> void:
 	_ants_root.add_child(worker)
 	worker.setup(
 			_tile_map,
+			_sid["dirt"],
 			_sid["tunnel"],
 			_sid["queen"],
 			tile_pos,
 			_world_w,
 			_world_h,
-			_surface_row)
+			_surface_row,
+			_food_positions)
+	AudioManager.play_ant_spawned()
 
 
 # ── Input ─────────────────────────────────────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		_handle_room_selection_key(event.keycode)
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_zoom_camera(_camera_zoom_step, event.position)
+			return
+		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_zoom_camera(-_camera_zoom_step, event.position)
+			return
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			var room_tile_pos: Vector2i = _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
+			_try_place_room_plan(room_tile_pos)
+			return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var tile_pos := _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
 		_try_place_dig_target(tile_pos)
+
+
+func _handle_room_selection_key(keycode: int) -> void:
+	if keycode == KEY_B:
+		_selected_room_index = posmod(_selected_room_index + 1, ROOM_TYPE_ORDER.size())
+		_selected_room_type = ROOM_TYPE_ORDER[_selected_room_index]
+		return
+	if keycode >= KEY_1 and keycode <= KEY_5:
+		_selected_room_index = int(keycode - KEY_1)
+		_selected_room_type = ROOM_TYPE_ORDER[_selected_room_index]
 
 
 func _try_place_dig_target(target: Vector2i) -> void:
@@ -173,19 +257,38 @@ func _try_place_dig_target(target: Vector2i) -> void:
 		return
 	if target in _protected:
 		return
+	if target in _food_positions:
+		return
 	if target in _dig_marker_nodes:
 		return
 	_add_dig_marker(target)
+	AudioManager.play_marker_placed()
 	GameManager.job_queue.add_job(JobQueue.TYPE_DIG, target)
 
 
+func _try_place_room_plan(target: Vector2i) -> void:
+	if target.x < 0 or target.x >= _world_w or target.y < 0 or target.y >= _world_h:
+		return
+	if _tile_map.get_cell_source_id(target) != _sid["tunnel"]:
+		return
+	if target in _protected:
+		return
+	var plan_id: int = GameManager.room_manager.create_room_plan(_selected_room_type, target)
+	if plan_id >= 0:
+		AudioManager.play_marker_placed()
+
+
 func _add_dig_marker(tile_pos: Vector2i) -> void:
-	var rect := ColorRect.new()
-	rect.color = Color(1.0, 0.5, 0.0, 0.55)
-	rect.size = Vector2(TILE_SIZE, TILE_SIZE)
-	rect.position = Vector2(tile_pos.x * TILE_SIZE, tile_pos.y * TILE_SIZE)
-	_dig_markers_root.add_child(rect)
-	_dig_marker_nodes[tile_pos] = rect
+	var marker := Panel.new()
+	marker.add_theme_stylebox_override("panel", _make_dig_marker_style())
+	marker.size = Vector2(TILE_SIZE, TILE_SIZE)
+	marker.pivot_offset = marker.size * 0.5
+	marker.position = Vector2(tile_pos.x * TILE_SIZE, tile_pos.y * TILE_SIZE)
+	_dig_markers_root.add_child(marker)
+	_dig_marker_nodes[tile_pos] = marker
+	var tween: Tween = create_tween()
+	tween.tween_property(marker, "scale", Vector2(1.18, 1.18), 0.11)
+	tween.tween_property(marker, "scale", Vector2.ONE, 0.14)
 
 
 func _remove_dig_marker(tile_pos: Vector2i) -> void:
@@ -194,17 +297,152 @@ func _remove_dig_marker(tile_pos: Vector2i) -> void:
 		_dig_marker_nodes.erase(tile_pos)
 
 
+func _make_dig_marker_style() -> StyleBoxFlat:
+	return ColonyUITheme.marker_style()
+
+
 func _on_job_completed(job: JobQueue.Job) -> void:
 	if job.type == JobQueue.TYPE_DIG:
 		_remove_dig_marker(job.tile_pos)
 
 
+func _connect_room_manager() -> void:
+	GameManager.room_manager.room_plan_created.connect(_on_room_plan_created)
+	GameManager.room_manager.room_plan_updated.connect(_on_room_plan_updated)
+	GameManager.room_manager.room_completed.connect(_on_room_completed)
+	GameManager.room_manager.worker_spawn_requested.connect(_on_worker_spawn_requested)
+
+
+func _on_room_plan_created(plan_id: int, room_type: String, tile_pos: Vector2i, _build_cost: int) -> void:
+	var marker := Panel.new()
+	marker.add_theme_stylebox_override("panel", _make_room_plan_style(0.0))
+	marker.size = Vector2(TILE_SIZE, TILE_SIZE)
+	marker.position = Vector2(tile_pos.x * TILE_SIZE, tile_pos.y * TILE_SIZE)
+	marker.tooltip_text = GameManager.room_manager.get_display_name(room_type)
+	_room_plans_root.add_child(marker)
+	_room_plan_nodes[plan_id] = marker
+
+
+func _on_room_plan_updated(plan_id: int, progress: int, build_cost: int) -> void:
+	if not (plan_id in _room_plan_nodes):
+		return
+	var ratio: float = 1.0 if build_cost <= 0 else clampf(float(progress) / float(build_cost), 0.0, 1.0)
+	_room_plan_nodes[plan_id].add_theme_stylebox_override("panel", _make_room_plan_style(ratio))
+
+
+func _on_room_completed(plan_id: int, room_type: String, tile_pos: Vector2i) -> void:
+	if plan_id in _room_plan_nodes:
+		_room_plan_nodes[plan_id].queue_free()
+		_room_plan_nodes.erase(plan_id)
+	_spawn_room_visual(plan_id, room_type, tile_pos)
+
+
+func _on_worker_spawn_requested(tile_pos: Vector2i) -> void:
+	var spawn_tile: Vector2i = _find_spawn_tile_near(tile_pos)
+	if spawn_tile != Vector2i(-1, -1):
+		_spawn_worker(spawn_tile)
+
+
+func _spawn_room_visual(room_id: int, room_type: String, tile_pos: Vector2i) -> void:
+	var sprite := Sprite2D.new()
+	sprite.texture = AssetLoader.get_room_sprite(room_type)
+	sprite.position = Vector2(
+			tile_pos.x * TILE_SIZE + TILE_SIZE / 2.0,
+			tile_pos.y * TILE_SIZE + TILE_SIZE / 2.0)
+	_fit_sprite_to_tile(sprite)
+	_rooms_root.add_child(sprite)
+	_room_nodes[room_id] = sprite
+
+
+func _find_spawn_tile_near(tile_pos: Vector2i) -> Vector2i:
+	if _tile_map.get_cell_source_id(tile_pos) == _sid["tunnel"]:
+		return tile_pos
+	for dir in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var candidate: Vector2i = tile_pos + dir
+		if _tile_map.get_cell_source_id(candidate) == _sid["tunnel"]:
+			return candidate
+	return Vector2i(-1, -1)
+
+
+func _fit_sprite_to_tile(sprite: Sprite2D) -> void:
+	if sprite.texture == null:
+		return
+	var texture_size: Vector2 = sprite.texture.get_size()
+	var largest_axis: float = maxf(texture_size.x, texture_size.y)
+	if largest_axis <= 0.0:
+		return
+	var fit_scale: float = float(TILE_SIZE) / largest_axis
+	sprite.scale = Vector2(fit_scale, fit_scale)
+
+
+func _make_room_plan_style(progress_ratio: float) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(
+			ColonyUITheme.ACCENT_PURPLE.r,
+			ColonyUITheme.ACCENT_PURPLE.g,
+			ColonyUITheme.ACCENT_PURPLE.b,
+			0.12 + progress_ratio * 0.32)
+	style.border_color = ColonyUITheme.ACCENT_PURPLE
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(0)
+	return style
+
+
 # ── Camera ────────────────────────────────────────────────────────────────────
 
 func _center_camera() -> void:
-	# zoom=1 so the entire world (960×640 px) fits inside the 1280×720 viewport —
-	# ants can never walk off-screen regardless of where they go.
-	_camera.zoom = Vector2(1.0, 1.0)
+	_set_camera_zoom(_camera_zoom)
 	_camera.position = Vector2(
 			_world_w * TILE_SIZE / 2.0,
 			_world_h * TILE_SIZE / 2.0)
+	_clamp_camera_to_world()
+
+
+func _zoom_camera(zoom_delta: float, screen_pos: Vector2) -> void:
+	var before_zoom_world_pos: Vector2 = _camera.get_screen_center_position() \
+			+ (screen_pos - get_viewport_rect().size * 0.5) / _camera.zoom
+	_set_camera_zoom(_camera.zoom.x + zoom_delta)
+	var after_zoom_world_pos: Vector2 = _camera.get_screen_center_position() \
+			+ (screen_pos - get_viewport_rect().size * 0.5) / _camera.zoom
+	_camera.position += before_zoom_world_pos - after_zoom_world_pos
+	_clamp_camera_to_world()
+
+
+func _set_camera_zoom(zoom_value: float) -> void:
+	var clamped_zoom: float = clampf(zoom_value, _camera_min_zoom, _camera_max_zoom)
+	_camera_zoom = clamped_zoom
+	_camera.zoom = Vector2(clamped_zoom, clamped_zoom)
+
+
+func _update_camera_movement(delta: float) -> void:
+	var move_dir: Vector2 = Vector2.ZERO
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		move_dir.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		move_dir.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		move_dir.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		move_dir.y += 1.0
+	if move_dir == Vector2.ZERO:
+		return
+	_camera.position += move_dir.normalized() * _camera_move_speed * delta
+	_clamp_camera_to_world()
+
+
+func _clamp_camera_to_world() -> void:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var visible_size: Vector2 = Vector2(
+			viewport_size.x / _camera.zoom.x,
+			viewport_size.y / _camera.zoom.y)
+	var world_size: Vector2 = Vector2(_world_w * TILE_SIZE, _world_h * TILE_SIZE)
+	var half_visible: Vector2 = visible_size * 0.5
+	var world_center: Vector2 = world_size * 0.5
+	if world_size.x <= visible_size.x:
+		_camera.position.x = world_center.x
+	else:
+		_camera.position.x = clampf(_camera.position.x, half_visible.x, world_size.x - half_visible.x)
+	if world_size.y <= visible_size.y:
+		_camera.position.y = world_center.y
+	else:
+		_camera.position.y = clampf(_camera.position.y, half_visible.y, world_size.y - half_visible.y)

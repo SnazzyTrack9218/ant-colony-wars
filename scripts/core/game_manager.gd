@@ -4,9 +4,11 @@ signal food_changed(amount: int)
 signal ant_count_changed(count: int)
 signal priority_changed(category: String, level: String)
 signal emergency_priority_set(category: String)
+signal queen_damaged(current_hp: int, max_hp: int)
 
 var colony: ColonyState
 var job_queue: JobQueue
+var room_manager: RoomManager
 
 
 func _ready() -> void:
@@ -16,6 +18,8 @@ func _ready() -> void:
 	colony.emergency_priority_set.connect(_on_emergency_priority_set)
 	job_queue = JobQueue.new()
 	add_child(job_queue)
+	room_manager = RoomManager.new()
+	add_child(room_manager)
 	print("GameManager: initialized")
 
 
@@ -30,6 +34,14 @@ func spend_food(amount: int) -> bool:
 	colony.food -= amount
 	food_changed.emit(colony.food)
 	return true
+
+
+func damage_queen(amount: int) -> void:
+	if amount <= 0:
+		return
+	colony.queen_hp = maxi(0, colony.queen_hp - amount)
+	queen_damaged.emit(colony.queen_hp, colony.queen_max_hp)
+	AudioManager.play_queen_damaged()
 
 
 func register_ant() -> void:

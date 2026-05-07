@@ -29,6 +29,33 @@ Every player action communicates **colony-level intent**. Ants decide how to car
 5. If a job becomes unreachable mid-travel, the ant unclaims it and re-enters IDLE.
 6. Ants ignore job types they cannot execute (soldiers do not score dig jobs).
 7. An ant may be interrupted by an Emergency Marker. When the emergency is resolved, it returns to its previous job.
+8. Ants must keep the colony alive by default. Low food, damaged rooms, exposed entrances, and missing nursery capacity create jobs through autonomy systems even when the player places no marker.
+9. Autonomy systems may create jobs, change temporary emergency pressure, and update memory. They may not directly dig, gather, build, repair, spawn, or fight outside the job queue.
+
+---
+
+## 2.1 Colony Survival Autopilot
+
+The colony should be playable as a self-running simulation. The player guides it with priorities and markers, but the ants handle survival details.
+
+### Baseline Autopilot Goals
+
+| Need | Autonomous response |
+|---|---|
+| Low food | Workers route-dig toward known or discovered food, then gather it |
+| No useful jobs | Workers explore multiple tunnel frontiers instead of drifting one direction |
+| Build priority high | Workers prepare space and execute Room Plan jobs |
+| Repair priority above normal | Workers create REPAIR jobs for damaged structures |
+| Defense priority high | Soldiers patrol queen, nursery, storage, and entrances |
+| Queen damaged | Temporary emergency pressure redirects ants/soldiers until safe |
+
+Rules:
+- Autopilot creates intent only through jobs, priorities, and colony memory.
+- Player-set priorities still matter; auto-escalation is temporary and must restore previous player settings.
+- Food survival beats random exploration when stores are below the configured low-food ratio.
+- Auto-created jobs must have budgets per category so the queue cannot flood or make workers fight between equally urgent jobs.
+- Generated maps may create buried food and obstacles, but not free tunnels to food. Ants must dig those paths.
+- The default start should not include a free surface shaft unless config enables it.
 
 ---
 
@@ -101,10 +128,10 @@ When an ant enters IDLE, it scores every unclaimed job and claims the highest sc
 
 ```
 job_score = priority_weight(job.category)
-          + (10.0 / (distance_to_job + 1.0))
-          - (danger_level * 5.0)
-          + (resource_urgency * 3.0)
-          + (solo_bonus * 2.0)
+		  + (10.0 / (distance_to_job + 1.0))
+		  - (danger_level * 5.0)
+		  + (resource_urgency * 3.0)
+		  + (solo_bonus * 2.0)
 ```
 
 | Term | Source | Notes |
@@ -129,8 +156,8 @@ Rules:
 
 ```
 IDLE → MOVING → WORKING → IDLE
-         ↓ (no path found)
-        IDLE
+		 ↓ (no path found)
+		IDLE
 ```
 
 | State | What happens |

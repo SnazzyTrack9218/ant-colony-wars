@@ -1,0 +1,8 @@
+{
+    "display_name": "Nursery",
+    "build_cost": 12,
+    "build_food_per_tick": 1,
+    "hatch_interval": 18.0,
+    "hatch_food_cost": 3,
+    "placeable": true
+}
