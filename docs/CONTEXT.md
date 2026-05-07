@@ -208,7 +208,7 @@ res://
 
 ## Current Development Phase
 
-**Phase 0.5 — Asset Pipeline & Placeholders** (complete, pending Godot import verification)
+**Phase 1 — Single-Player Colony Prototype** (in progress)
 
 ---
 
@@ -219,25 +219,33 @@ res://
 - `tools/generate_placeholders.py` — generates all 20 placeholder PNGs
 - `process_assets.py` + `tools/pipeline/` — sprite sheet processing pipeline
 - All 20 placeholder PNGs in `assets/sprites/`
+- `scripts/core/game_manager.gd` — autoload; food signals; ant count tracking
+- `scripts/core/colony_state.gd` — food, max_food, ant_count, priorities dict
+- `scripts/core/job_queue.gd` — JobType enum, Job class, claim/release/complete/score
+- `scripts/ants/worker_ant.gd` — 4-state FSM (IDLE/MOVING/WORKING/IDLE_WANDER) + BFS
+- `scripts/main.gd` — world setup, tileset, input, worker spawning, food sources
+- `scripts/ui/hud.gd` — food counter and worker count labels
+- `scenes/main/main.tscn` — root scene; TileMapLayer, Ants, markers, Camera2D, HUD
+- `scenes/ants/worker_ant.tscn` — worker ant node with Sprite2D
+- `scenes/ui/hud.tscn` — CanvasLayer with food/ant labels
+- `data/ants/worker_config.json` — move_speed, dig_duration
+- `data/colony/colony_config.json` — world size, queen position, starting workers
 - All planning docs
 
 ---
 
 ## Systems Not Built Yet
 
-- TileMap / world grid
-- Worker ant scene and FSM
-- Job queue and job scoring
-- Colony state and priority system
-- Food resource system
-- Room placement (Room Plan Markers)
-- Enemy spawning and combat
-- Soldier ant FSM
-- HUD / Priority Panel UI
-- Upgrades system
-- Local multiplayer
-- Online multiplayer
-- Steam integration
+- Worker ant sprite assigned (Sprite2D has no texture yet — Phase 1 pending Godot import)
+- Priority Panel UI (Phase 2)
+- Full job score formula with danger/urgency terms (Phase 2)
+- Room placement (Room Plan Markers) (Phase 3)
+- Enemy spawning and combat (Phase 4)
+- Soldier ant FSM (Phase 4)
+- Upgrades system (Phase 5)
+- Local multiplayer (Phase 6)
+- Online multiplayer (Phase 7)
+- Steam integration (Phase 8)
 
 ---
 

@@ -1,0 +1,11 @@
+{
+    "starting_workers": 3,
+    "starting_food": 0,
+    "max_food": 200,
+    "food_source_count": 4,
+    "world_width": 60,
+    "world_height": 40,
+    "surface_row": 5,
+    "queen_col": 30,
+    "queen_row": 27
+}

@@ -11,12 +11,22 @@ config_version=5
 [application]
 
 config/name="AntColony"
+run/main_scene="uid://b6d6k5a4yo6ln"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/mode=3
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [autoload]
 
 AssetLoader="*res://scripts/assets/asset_loader.gd"
+GameManager="*res://scripts/core/game_manager.gd"
 
 [physics]
 
