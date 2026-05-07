@@ -175,57 +175,8 @@ func _try_place_dig_target(target: Vector2i) -> void:
 		return
 	if target in _dig_marker_nodes:
 		return
-	var path := _find_dig_path(target)
-	for p in path:
-		if p in _dig_marker_nodes:
-			continue
-		_add_dig_marker(p)
-		GameManager.job_queue.add_job(JobQueue.TYPE_DIG, p)
-
-
-func _find_dig_path(target: Vector2i) -> Array:
-	# Multi-source BFS starting from all existing tunnel tiles, expanding only
-	# through dirt, until the target is reached. Returns the dirt tiles in
-	# dig order (nearest to tunnel first).
-	var queue: Array = []
-	var came_from: Dictionary = {}
-
-	for y in range(_surface_row, _world_h):
-		for x in range(_world_w):
-			var pos := Vector2i(x, y)
-			var src := _tile_map.get_cell_source_id(pos)
-			if src == _sid["tunnel"] or src == _sid["queen"]:
-				came_from[pos] = null
-				queue.append(pos)
-
-	var found := false
-	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	while not queue.is_empty():
-		var current: Vector2i = queue.pop_front()
-		if current == target:
-			found = true
-			break
-		for dir in dirs:
-			var nb: Vector2i = current + dir
-			if nb in came_from:
-				continue
-			if nb.x < 0 or nb.x >= _world_w or nb.y < 0 or nb.y >= _world_h:
-				continue
-			if nb in _protected:
-				continue
-			if _tile_map.get_cell_source_id(nb) == _sid["dirt"]:
-				came_from[nb] = current
-				queue.append(nb)
-
-	if not found:
-		return []
-
-	var path: Array = []
-	var node: Vector2i = target
-	while came_from[node] != null:
-		path.push_front(node)
-		node = came_from[node]
-	return path
+	_add_dig_marker(target)
+	GameManager.job_queue.add_job(JobQueue.TYPE_DIG, target)
 
 
 func _add_dig_marker(tile_pos: Vector2i) -> void:

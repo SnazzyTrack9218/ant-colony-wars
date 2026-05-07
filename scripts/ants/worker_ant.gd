@@ -119,6 +119,10 @@ func _start_moving_to_job() -> void:
 	if _current_job == null:
 		_enter_idle()
 		return
+	if _current_job.type == JobQueue.TYPE_DIG:
+		_move_toward_dig_dest()
+		return
+	# GATHER — path directly to tile.
 	_path = _find_path(_tile_pos, _current_job.tile_pos)
 	if _path.is_empty():
 		if _can_work_current_job_from_here():
@@ -127,6 +131,45 @@ func _start_moving_to_job() -> void:
 			GameManager.job_queue.release_job(_current_job.id)
 			_current_job = null
 			_start_wander()
+		return
+	_state = State.MOVING
+	_move_step()
+
+
+func _move_toward_dig_dest() -> void:
+	if _current_job == null:
+		_enter_idle()
+		return
+	var dest := _current_job.tile_pos
+	if _is_traversable(dest):
+		GameManager.job_queue.complete_job(_current_job.id)
+		_current_job = null
+		_enter_idle()
+		return
+	var next_tile := _find_next_dig_tile(dest)
+	if next_tile == Vector2i(-1, -1):
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+		_start_wander()
+		return
+	var dig_from: Array = []
+	for dir in DIRS:
+		var n: Vector2i = next_tile + dir
+		if _is_traversable(n):
+			dig_from.append(n)
+	if dig_from.is_empty():
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+		_start_wander()
+		return
+	if _tile_pos in dig_from:
+		_start_working()
+		return
+	_path = _bfs(_tile_pos, dig_from)
+	if _path.is_empty():
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+		_start_wander()
 		return
 	_state = State.MOVING
 	_move_step()
@@ -196,13 +239,31 @@ func _start_working() -> void:
 
 
 func _do_dig() -> void:
+	if _current_job == null:
+		_enter_idle()
+		return
+	var dest := _current_job.tile_pos
+	if _is_traversable(dest):
+		GameManager.job_queue.complete_job(_current_job.id)
+		_current_job = null
+		_enter_idle()
+		return
+	var next_tile := _find_next_dig_tile(dest)
+	if next_tile == Vector2i(-1, -1):
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+		_enter_idle()
+		return
+	# Verify adjacency — if not adjacent, re-position.
+	if abs(_tile_pos.x - next_tile.x) + abs(_tile_pos.y - next_tile.y) != 1:
+		_move_toward_dig_dest()
+		return
 	await get_tree().create_timer(_dig_duration).timeout
 	if not is_instance_valid(self) or _current_job == null or not is_instance_valid(_tile_map):
 		return
-	_tile_map.set_cell(_current_job.tile_pos, _sid_tunnel, Vector2i(0, 0))
-	GameManager.job_queue.complete_job(_current_job.id)
-	_current_job = null
-	_enter_idle()
+	_tile_map.set_cell(next_tile, _sid_tunnel, Vector2i(0, 0))
+	# Continue toward destination (loops until dest is reached or unreachable).
+	_move_toward_dig_dest()
 
 
 func _do_gather() -> void:
@@ -260,6 +321,21 @@ func _find_path(from: Vector2i, to: Vector2i) -> Array:
 
 
 func _get_job_distance(job) -> int:
+	if job.type == JobQueue.TYPE_DIG:
+		var next_tile := _find_next_dig_tile(job.tile_pos)
+		if next_tile == Vector2i(-1, -1):
+			return -1
+		var dig_from: Array = []
+		for dir in DIRS:
+			var n: Vector2i = next_tile + dir
+			if _is_traversable(n):
+				dig_from.append(n)
+		if dig_from.is_empty():
+			return -1
+		if _tile_pos in dig_from:
+			return 0
+		var path := _bfs(_tile_pos, dig_from)
+		return path.size() if not path.is_empty() else -1
 	if _can_work_job_from_tile(job, _tile_pos):
 		return 0
 	var path := _find_path(_tile_pos, job.tile_pos)
@@ -279,6 +355,30 @@ func _can_work_job_from_tile(job, tile: Vector2i) -> bool:
 		JobQueue.TYPE_GATHER:
 			return job.tile_pos == tile
 	return false
+
+
+func _find_next_dig_tile(dest: Vector2i) -> Vector2i:
+	# BFS outward from dest through non-traversable tiles.
+	# Returns the non-traversable tile closest to dest that borders existing tunnel.
+	var queue: Array = [dest]
+	var visited: Dictionary = {dest: true}
+	while not queue.is_empty():
+		var current: Vector2i = queue.pop_front()
+		if not _is_traversable(current):
+			for dir in DIRS:
+				var n: Vector2i = current + dir
+				if _is_traversable(n):
+					return current
+		for dir in DIRS:
+			var n: Vector2i = current + dir
+			if n in visited:
+				continue
+			if n.x < 0 or n.x >= _world_w or n.y < 0 or n.y >= _world_h:
+				continue
+			if not _is_traversable(n):
+				visited[n] = true
+				queue.append(n)
+	return Vector2i(-1, -1)
 
 
 func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
