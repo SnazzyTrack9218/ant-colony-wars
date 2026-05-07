@@ -133,6 +133,7 @@ func _load_config() -> void:
 	_queen_row = int(data.get("queen_row", _queen_row))
 	_starting_workers = int(data.get("starting_workers", _starting_workers))
 	GameManager.colony.max_food = int(data.get("max_food", GameManager.colony.max_food))
+	GameManager.colony.max_workers = int(data.get("max_workers", GameManager.colony.max_workers))
 	GameManager.colony.food = clampi(
 			int(data.get("starting_food", GameManager.colony.food)),
 			0,

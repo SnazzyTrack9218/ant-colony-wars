@@ -84,7 +84,7 @@ func setup(
 	position = _tile_to_world(start_tile)
 	_load_config()
 	_fit_sprite_to_tile()
-	GameManager.register_ant()
+	GameManager.register_worker()
 	GameManager.priority_changed.connect(_on_priority_changed)
 	_enter_idle()
 
@@ -122,7 +122,7 @@ func _load_config() -> void:
 func _exit_tree() -> void:
 	if _current_job != null:
 		GameManager.job_queue.release_job(_current_job.id)
-	GameManager.unregister_ant()
+	GameManager.unregister_worker()
 
 
 # ── FSM ───────────────────────────────────────────────────────────────────────

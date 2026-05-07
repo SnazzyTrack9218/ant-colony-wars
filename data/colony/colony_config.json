@@ -2,6 +2,7 @@
     "starting_workers": 5,
     "starting_food": 0,
     "max_food": 200,
+    "max_workers": 20,
     "queen_hp": 100,
     "queen_max_hp": 100,
     "food_source_count": 8,

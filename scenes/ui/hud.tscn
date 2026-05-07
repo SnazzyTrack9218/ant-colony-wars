@@ -22,6 +22,14 @@ offset_bottom = 62.0
 text = "Workers: 0"
 theme_override_font_sizes/font_size = 16
 
+[node name="SoldierLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 60.0
+offset_right = 300.0
+offset_bottom = 84.0
+text = "Soldiers: 0"
+theme_override_font_sizes/font_size = 14
+
 [node name="HintLabel" type="Label" parent="."]
 offset_left = 10.0
 offset_top = 62.0

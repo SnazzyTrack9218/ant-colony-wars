@@ -8,7 +8,9 @@ const PRIORITY_ORDER: Array[String] = ["low", "normal", "high", "emergency"]
 
 var food: int = 0
 var max_food: int = 200
-var ant_count: int = 0
+var worker_count: int = 0
+var soldier_count: int = 0
+var max_workers: int = 20
 var queen_hp: int = 100
 var queen_max_hp: int = 100
 var _priority_weights: Dictionary = {}
@@ -81,3 +83,11 @@ func get_resource_urgency(category: String) -> float:
 			return 0.0
 		return clamp(1.0 - (float(food) / float(max_food)), 0.0, 1.0)
 	return 0.0
+
+
+func get_total_ant_count() -> int:
+	return worker_count + soldier_count
+
+
+func can_hatch_worker() -> bool:
+	return worker_count < max_workers

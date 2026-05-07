@@ -140,6 +140,9 @@ func _tick_room_effect(room: Dictionary, delta: float) -> void:
 
 
 func _try_hatch_worker(room: Dictionary, config: Dictionary) -> void:
+	# Respect worker cap before spending food.
+	if not GameManager.can_hatch_worker():
+		return
 	var food_cost: int = maxi(0, int(config.get("hatch_food_cost", 0)))
 	if food_cost > 0 and not GameManager.spend_food(food_cost):
 		return

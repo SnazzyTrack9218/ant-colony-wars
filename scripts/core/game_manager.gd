@@ -1,7 +1,8 @@
 extends Node
 
 signal food_changed(amount: int)
-signal ant_count_changed(count: int)
+signal worker_count_changed(count: int, max_count: int)
+signal soldier_count_changed(count: int)
 signal priority_changed(category: String, level: String)
 signal emergency_priority_set(category: String)
 signal queen_damaged(current_hp: int, max_hp: int)
@@ -44,14 +45,28 @@ func damage_queen(amount: int) -> void:
 	AudioManager.play_queen_damaged()
 
 
-func register_ant() -> void:
-	colony.ant_count += 1
-	ant_count_changed.emit(colony.ant_count)
+func register_worker() -> void:
+	colony.worker_count += 1
+	worker_count_changed.emit(colony.worker_count, colony.max_workers)
 
 
-func unregister_ant() -> void:
-	colony.ant_count = maxi(0, colony.ant_count - 1)
-	ant_count_changed.emit(colony.ant_count)
+func unregister_worker() -> void:
+	colony.worker_count = maxi(0, colony.worker_count - 1)
+	worker_count_changed.emit(colony.worker_count, colony.max_workers)
+
+
+func register_soldier() -> void:
+	colony.soldier_count += 1
+	soldier_count_changed.emit(colony.soldier_count)
+
+
+func unregister_soldier() -> void:
+	colony.soldier_count = maxi(0, colony.soldier_count - 1)
+	soldier_count_changed.emit(colony.soldier_count)
+
+
+func can_hatch_worker() -> bool:
+	return colony.can_hatch_worker()
 
 
 func set_priority(category: String, level: String) -> void:

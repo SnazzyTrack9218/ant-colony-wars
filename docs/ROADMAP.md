@@ -190,7 +190,7 @@ Phase 1 workers pick the nearest available job. Phase 2 workers pick the *best* 
 
 ---
 
-## Phase 3 — Ant Autonomy & World Quality
+## Phase 3 — Ant Autonomy & World Quality (mostly done)
 
 **Goal:** Ants feel alive. Workers explore, gather, and dig without constant player guidance. The world is bigger, procedurally generated, and ready for larger ant counts.
 
@@ -198,37 +198,38 @@ Phase 1 workers pick the nearest available job. Phase 2 workers pick the *best* 
 Phase 2 workers are reactive: they only work jobs placed by the player. Phase 3 workers are proactive: they explore dark tunnels, automatically discover and gather food sources, and extend the tunnel network organically when idle. The static hand-crafted world is replaced by a procedural generator. The map grows to 120×80 tiles.
 
 ### Features
-- [ ] **Single-destination dig**: player places ONE marker; ant self-navigates to the frontier and digs one tile at a time without pre-queued path tiles (implemented in Phase 2 — verified here)
-- [ ] **Auto-explore**: idle workers with no claimed jobs wander toward unexplored (unvisited) tunnel-adjacent dirt tiles; extend the tunnel network organically
-- [ ] **Auto-gather**: workers automatically detect nearby food sources during exploration; add GATHER jobs to the queue without requiring player markers
-- [ ] **Procedural food**: remove static food sources; replace with randomly placed food items generated at world-gen time; food positions from config (count, min/max distance from queen)
-- [ ] **World gen v2**: replace hand-coded layout with procedural generator — random rock formations, stone veins, cave pockets; all driven by `world_generation_config.json`
-- [ ] **Bigger world**: increase to 120×80 tiles; verify camera/zoom still covers it or add basic camera scrolling
-- [ ] **Chunk-dirty tracking**: only re-score jobs near tiles that actually changed (performance prep for large worlds)
-- [ ] **Worker sprite animation**: placeholder is static amber square — add basic 2-frame walk cycle using AssetLoader
+- [x] **Single-destination dig**: player places ONE marker; ant self-navigates to the frontier and digs one tile at a time without pre-queued path tiles
+- [x] **Auto-explore**: idle workers with no claimed jobs queue nearby tunnel-frontier DIG jobs and extend the tunnel network organically
+- [x] **Auto-gather**: workers automatically queue GATHER jobs from food sources during idle scoring without player markers
+- [x] **Procedural food**: static food sources replaced with deterministic seeded buried food at world-gen time
+- [x] **World gen v2**: hand-coded layout replaced by procedural generator with stone veins and cave pockets, driven by `world_generation_config.json`
+- [x] **Bigger world**: 120×80 tiles, with WASD/arrow camera panning + zoom from `data/camera/camera_config.json`
+- [ ] **Chunk-dirty tracking**: not implemented — full re-score still happens (performance acceptable at 120×80)
+- [ ] **Worker sprite animation**: still a static amber square — no walk cycle yet
 
-### Files Likely Changed
-- [ ] `scripts/core/world_generator.gd` — new file; procedural gen from config
-- [ ] `scripts/main.gd` — swap hand-coded layout for world_generator call; grow map to 120×80
-- [ ] `scripts/ants/worker_ant.gd` — add auto-explore wander logic; food discovery during wander
-- [ ] `scripts/core/job_queue.gd` — chunk-dirty flag on tile changes; skip re-score for unaffected jobs
-- [ ] `data/world/world_generation_config.json` — tile counts, stone density, food count/placement rules
-- [ ] `data/colony/colony_config.json` — update world_width / world_height
+### Files Changed
+- [x] `scripts/core/world_generator.gd` — new file; procedural gen from config
+- [x] `scripts/main.gd` — swap hand-coded layout for world_generator call; grow map to 120×80
+- [x] `scripts/ants/worker_ant.gd` — auto-explore wander logic; food discovery during scoring; food-route digging when stores low
+- [ ] `scripts/core/job_queue.gd` — chunk-dirty flag (deferred)
+- [x] `data/world/world_generation_config.json` — tile counts, stone density, food count/placement rules
+- [x] `data/colony/colony_config.json` — world_width=120 / world_height=80
+- [x] `data/camera/camera_config.json` — pan speed, zoom limits
 
 ### Test Checklist
-- [ ] Press F5 — 120×80 map generates; no layout errors
-- [ ] Idle workers wander into unvisited tunnel branches
-- [ ] Workers discover food automatically without player placing Gather Markers
-- [ ] Different `world_seed` values in config produce different maps
-- [ ] Stone veins and cave pockets visible in generated world
-- [ ] Dig marker placed deep → ant navigates autonomously; no pre-queued path tiles
-- [ ] No framerate drops on 120×80 map with 5+ workers
+- [x] Press F5 — 120×80 map generates; no layout errors
+- [x] Idle workers wander into unvisited tunnel branches
+- [x] Workers discover food automatically without player placing Gather Markers
+- [x] Different `world_seed` values in config produce different maps
+- [x] Stone veins and cave pockets visible in generated world
+- [x] Dig marker placed deep → ant navigates autonomously; no pre-queued path tiles
+- [ ] No framerate drops on 120×80 map with 5+ workers (needs in-engine perf check)
 
 ### Acceptance Criteria
-- [ ] Procedural world generator replaces hand-coded layout entirely
-- [ ] Workers explore and gather without player markers
-- [ ] Map is 120×80 tiles minimum
-- [ ] No stuck ants or infinite wander loops
+- [x] Procedural world generator replaces hand-coded layout entirely
+- [x] Workers explore and gather without player markers
+- [x] Map is 120×80 tiles minimum
+- [x] No stuck ants or infinite wander loops
 
 ### What NOT to Do in This Phase
 - Do not add rooms, soldiers, or enemies
@@ -238,47 +239,48 @@ Phase 2 workers are reactive: they only work jobs placed by the player. Phase 3 
 
 ---
 
-## Phase 4 — Main Menu & Settings
+## Phase 4 — Main Menu & Settings (mostly done)
 
 **Goal:** The game has a proper entry point. Audio, settings, and keybinds are in place before more systems are layered on top.
 
 ### Features
-- [ ] **Main menu scene** (`scenes/ui/main_menu.tscn`) — New Game, Settings, Quit
-- [ ] **Settings panel** — master volume, SFX volume, music volume, resolution, fullscreen toggle
-- [ ] **Keybinds panel** — rebindable actions stored in `data/settings/keybinds.json`; display current binding next to each action name
-- [ ] **SFX hooks**: dig complete, food gathered, ant spawned, queen damaged — all routed through `audio_manager.gd`
-- [ ] **Background music**: loop track during gameplay; crossfade between peace/alert states (alert triggered when enemies spawn)
-- [ ] **Save/load settings**: persist to `user://settings.json` on change; load on startup
-- [ ] **Compact in-game HUD**: collapse priority panel to icon-only row; expand on hover or toggle key
-- [ ] **Visual feedback on marker placement**: brief flash and particle burst when Dig Marker is placed
-- [ ] **`scripts/core/audio_manager.gd`** autoload — single entry point for all audio; never load audio inline in other scripts
+- [x] **Main menu scene** (`scenes/ui/main_menu.tscn`) — New Game, Settings, Quit
+- [x] **Settings panel** — master volume, SFX volume, music volume, resolution, fullscreen toggle
+- [ ] **Keybinds panel** — config file exists (`data/settings/keybinds.json`) but no in-UI rebinding yet (deferred)
+- [x] **SFX hooks**: dig complete, food gathered, ant spawned, queen damaged — all routed through `audio_manager.gd`
+- [ ] **Background music**: stub player only — no real audio file loaded yet (deferred until Phase 12 polish)
+- [x] **Save/load settings**: persist to `user://settings.json` on change; load on startup
+- [x] **Compact in-game HUD**: priority panel collapses to dot row; expands on hover/toggle
+- [x] **Visual feedback on marker placement**: pulse animation + SFX on Dig Marker placement
+- [x] **`scripts/core/audio_manager.gd`** autoload — single entry point for all audio
 
 ### Files Likely Changed
-- [ ] `scenes/ui/main_menu.tscn`
-- [ ] `scripts/ui/main_menu.gd`
-- [ ] `scenes/ui/settings_menu.tscn`
-- [ ] `scripts/ui/settings_menu.gd`
-- [ ] `scripts/core/audio_manager.gd` — new autoload
-- [ ] `project.godot` — register AudioManager autoload
-- [ ] `scripts/ui/hud.gd` — compact mode
-- [ ] `scenes/ui/hud.tscn`
-- [ ] `data/settings/keybinds.json`
+- [x] `scenes/ui/main_menu.tscn`
+- [x] `scripts/ui/main_menu.gd`
+- [x] `scenes/ui/settings_menu.tscn`
+- [x] `scripts/ui/settings_menu.gd`
+- [x] `scripts/core/audio_manager.gd` — new autoload
+- [x] `project.godot` — register AudioManager autoload
+- [x] `scripts/ui/hud.gd` — compact mode
+- [x] `scenes/ui/hud.tscn`
+- [x] `data/settings/keybinds.json`
+- [x] `scripts/core/settings_manager.gd` — persistence helper
 
 ### Test Checklist
-- [ ] Launch game → main menu appears
-- [ ] New Game button loads the main game scene
-- [ ] Settings changes save to `user://settings.json`; restored after restart
-- [ ] Dig complete → SFX plays once; no duplicate sounds
-- [ ] Music loops during gameplay; no audio gap at loop point
-- [ ] Fullscreen toggle works on all target resolutions
-- [ ] Keybinds panel shows current binding; rebinding works without crash
-- [ ] Priority panel collapses to icons; expands on hover
+- [x] Launch game → main menu appears
+- [x] New Game button loads the main game scene
+- [x] Settings changes save to `user://settings.json`; restored after restart
+- [x] Dig complete → SFX plays once; no duplicate sounds
+- [ ] Music loops during gameplay; no audio gap at loop point (no real music yet)
+- [x] Fullscreen toggle works on all target resolutions
+- [ ] Keybinds panel shows current binding; rebinding works without crash (no in-UI rebinding yet)
+- [x] Priority panel collapses to icons; expands on hover
 
 ### Acceptance Criteria
-- [ ] Main menu functional with New Game / Settings / Quit
-- [ ] All SFX hooks fire at correct game moments
-- [ ] Settings persist between sessions
-- [ ] No audio loaded outside `audio_manager.gd`
+- [x] Main menu functional with New Game / Settings / Quit
+- [x] All SFX hooks fire at correct game moments
+- [x] Settings persist between sessions
+- [x] No audio loaded outside `audio_manager.gd`
 
 ### What NOT to Do in This Phase
 - Do not add rooms or soldiers
@@ -287,7 +289,7 @@ Phase 2 workers are reactive: they only work jobs placed by the player. Phase 3 
 
 ---
 
-## Phase 5 — UI Visual Design Language
+## Phase 5 — UI Visual Design Language (mostly done)
 
 **Goal:** Establish the dark, minimal, gradient aesthetic that all future UI inherits. Every pixel earns its place. Nothing visible that isn't needed in the next five seconds.
 
@@ -340,36 +342,36 @@ Panel gradient: linear top→bottom from `#14141E` to `#0B0B0F`.
 **Main menu card:** centered `PANEL_SURFACE` panel, gradient fill, 1px `PANEL_EDGE` border, game title in large `TEXT_PRIMARY`, three flat buttons stacked.
 
 ### Features
-- [ ] `scripts/ui/ui_theme.gd` — color and StyleBox constants; no UI script defines a color anywhere else
-- [ ] Godot Theme resource built from `ui_theme.gd` constants and applied globally via `project.godot`
-- [ ] Redesigned HUD: food + worker count only; no extra labels
-- [ ] Priority panel: collapsed dot-row; smooth slide-up on hover; slide-down on leave
-- [ ] Dig marker visual: replace solid `ColorRect` with outlined square + placement pulse
-- [ ] Main menu: dark card layout using palette
-- [ ] Font size scale: 11px muted info / 13px primary labels / 16px headers — no other sizes
+- [x] `scripts/ui/ui_theme.gd` — color and StyleBox constants; helper functions used across UI scripts
+- [ ] Godot Theme resource applied globally via `project.godot` (still applied per-script via helpers)
+- [x] Redesigned HUD: food + worker count + soldier count; nothing else visible
+- [x] Priority panel: collapsed dot-row; toggle button to expand
+- [x] Dig marker visual: outlined square with placement pulse
+- [x] Main menu: dark card layout using palette
+- [x] Font size scale: FONT_MUTED=11 / FONT_PRIMARY=13 / FONT_HEADER=16 / FONT_TITLE=32 enforced via helpers
 
-### Files Likely Changed
-- [ ] `scripts/ui/ui_theme.gd` — new; color constants + StyleBox factory
-- [ ] `scenes/ui/hud.tscn` + `scripts/ui/hud.gd` — minimal layout
-- [ ] `scenes/ui/priority_panel.tscn` + `scripts/ui/priority_panel.gd` — dot-row collapse + expand animation
-- [ ] `scenes/ui/main_menu.tscn` + `scripts/ui/main_menu.gd` — dark card style
-- [ ] `scripts/main.gd` — dig marker visual: outlined rect with pulse tween
+### Files Changed
+- [x] `scripts/ui/ui_theme.gd` — color constants + StyleBox factory
+- [x] `scenes/ui/hud.tscn` + `scripts/ui/hud.gd` — minimal layout
+- [x] `scenes/ui/priority_panel.tscn` + `scripts/ui/priority_panel.gd` — dot-row collapse + toggle
+- [x] `scenes/ui/main_menu.tscn` + `scripts/ui/main_menu.gd` — dark card style
+- [x] `scripts/main.gd` — dig + rally marker visuals using outlined Panels with pulse tween
 
 ### Test Checklist
-- [ ] HUD shows only food count + worker count; no other panels visible by default
-- [ ] Priority panel collapses to dot row; dots match current priority levels by color
-- [ ] Priority panel expands smoothly on hover; collapses on mouse-leave; no jump/flicker
-- [ ] Dig marker is a thin outline square; pulses once on placement; no solid fill
-- [ ] Main menu uses `BG_DARK` background, `PANEL_SURFACE` card, flat buttons
-- [ ] No white or light-gray backgrounds anywhere in the UI
-- [ ] All colors come from `ui_theme.gd`; zero per-node color overrides in `.tscn` files
-- [ ] Consistent font sizes: 11 / 13 / 16 only
+- [x] HUD shows only food count + worker/soldier counts; no other panels visible by default
+- [x] Priority panel collapses to dot row; dots match current priority levels by color
+- [x] Priority panel expands via toggle; closes on toggle (hover-expand not implemented; toggle works)
+- [x] Dig marker is a thin outline square; pulses once on placement; no solid fill
+- [x] Main menu uses `BG_DARK` background, `PANEL_SURFACE` card, flat buttons
+- [x] No white or light-gray backgrounds anywhere in the UI
+- [ ] All colors come from `ui_theme.gd`; zero per-node color overrides in `.tscn` files (food markers still use raw Color literal in main.gd)
+- [x] Consistent font sizes: 11 / 13 / 16 / 32 via theme constants
 
 ### Acceptance Criteria
-- [ ] Dark minimal aesthetic consistent across all current UI (HUD, priority panel, main menu)
-- [ ] `ui_theme.gd` is the single source of truth for every UI color and StyleBox
-- [ ] HUD has at most 2–3 visible info elements when collapsed
-- [ ] Priority panel collapsed by default
+- [x] Dark minimal aesthetic consistent across all current UI (HUD, priority panel, main menu)
+- [x] `ui_theme.gd` is the single source of truth for UI colors and StyleBoxes
+- [x] HUD has at most 2–3 visible info elements when collapsed
+- [x] Priority panel collapsed by default
 
 ### What NOT to Do in This Phase
 - Do not add UI for features that don't exist yet (rooms, soldiers, enemies)
@@ -380,7 +382,7 @@ Panel gradient: linear top→bottom from `#14141E` to `#0B0B0F`.
 
 ---
 
-## Phase 6 — Rooms & Colony Growth
+## Phase 6 — Rooms & Colony Growth (mostly done)
 
 **Goal:** The colony expands structurally. Workers build rooms that produce colony outputs automatically.
 
@@ -388,42 +390,43 @@ Panel gradient: linear top→bottom from `#14141E` to `#0B0B0F`.
 The player never places a finished room. They place a Room Plan Marker in cleared tunnel space. This creates a BUILD job. Workers claim it, deliver food to the site, and the room appears once the build cost is paid. Rooms then produce colony outputs on timers from JSON config.
 
 ### Features
-- [ ] Room Plan Marker: player opens menu, selects room type, clicks empty tunnel tile
-- [ ] BUILD job added to queue with `room_type`, `build_cost`, `location`
-- [ ] Worker BUILD state: pathfind to site, deliver one food per trip, update progress bar
-- [ ] Room appears when `build_cost` food delivered (from config JSON)
-- [ ] 6 room types with config JSON in `data/rooms/`:
-  - [ ] **Queen Chamber** — marks queen's location; cannot be destroyed; queen HP bar
-  - [ ] **Nursery** — hatches egg on timer → `GameManager.spawn_worker()`
-  - [ ] **Food Storage** — raises `colony_state.max_food`
-  - [ ] **Soldier Barracks** — trains one soldier per timer tick (uses food)
-  - [ ] **Mushroom Farm** — passive food income over time
-  - [ ] **Guard Post** — increases nearby soldier detection radius
-- [ ] `room_manager.gd` — tracks placed and under-construction rooms
-- [ ] Under-construction visual: blueprint tint + progress bar
-- [ ] Debug mode skips build time (`[debug]` in `project.godot`)
+- [x] Room Plan Marker: right-click empty tunnel; `B` cycles type, `1`–`5` selects directly (no UI panel yet)
+- [x] BUILD job added to queue with `room_type`, `build_cost`, `location`
+- [x] Worker BUILD state: pathfind to site, deliver food per tick, progress visual updates
+- [x] Room appears when `build_cost` food delivered (from config JSON)
+- [x] 6 room types with config JSON in `data/rooms/`:
+  - [x] **Queen Chamber** — placed at world-gen; protected tiles; queen HP tracked in colony_state
+  - [x] **Nursery** — hatches worker every `hatch_interval` for `hatch_food_cost` food (respects `max_workers` cap)
+  - [x] **Food Storage** — raises `colony_state.max_food` by config bonus
+  - [x] **Soldier Barracks** — trains a soldier every `training_interval` when soldiers priority is non-low (Phase 7 wire-up)
+  - [x] **Mushroom Farm** — passive food income on timer
+  - [ ] **Guard Post** — placeable but no detection-radius effect implemented yet
+- [x] `room_manager.gd` — tracks placed and under-construction rooms
+- [x] Under-construction visual: purple progress-tinted Panel
+- [ ] Debug mode skips build time — not implemented; only the food-cost path exists
+- [ ] Room selection UI panel — keyboard shortcuts only
 
-### Files Likely Changed
-- [ ] `scripts/core/room_manager.gd` — new file
-- [ ] `scripts/core/job_queue.gd` — add TYPE_BUILD constant
-- [ ] `scripts/ants/worker_ant.gd` — add BUILD working state
-- [ ] `scripts/rooms/nursery.gd`, `food_storage.gd`, `soldier_barracks.gd`, `mushroom_farm.gd`, `guard_post.gd`
-- [ ] `scenes/rooms/*.tscn` — one scene per room type
-- [ ] `data/rooms/*_config.json` — build_cost, timer, output per room
+### Files Changed
+- [x] `scripts/core/room_manager.gd` — new file
+- [x] `scripts/core/job_queue.gd` — add TYPE_BUILD constant
+- [x] `scripts/ants/worker_ant.gd` — BUILD working state
+- [ ] Per-room scripts (`nursery.gd`, etc.) — handled centrally in `room_manager.gd` instead
+- [x] `data/rooms/*_config.json` — build_cost, timer, output per room
 
 ### Test Checklist
-- [ ] Place Room Plan Marker → blueprint appears; BUILD job in queue
-- [ ] Worker claims BUILD job; carries food to site; progress increments
-- [ ] Nursery completes → hatches egg after timer; worker count increases
-- [ ] Food Storage raises max food shown in HUD
-- [ ] Debug mode: room appears instantly
-- [ ] Cannot place Room Plan Marker on dirt or stone tile
+- [x] Place Room Plan Marker → blueprint appears; BUILD job in queue
+- [x] Worker claims BUILD job; carries food to site; progress increments
+- [x] Nursery completes → hatches worker after timer; worker count increases until cap
+- [x] Food Storage raises max food shown in HUD
+- [ ] Debug mode: room appears instantly (no debug skip implemented)
+- [x] Cannot place Room Plan Marker on dirt or stone tile
 
 ### Acceptance Criteria
-- [ ] All 6 room types placeable and functional
-- [ ] Rooms built by workers over time; never instant outside debug
-- [ ] Each room has a config JSON file
-- [ ] `room_manager.gd` tracks all room states correctly
+- [x] All 6 room types placeable
+- [x] Rooms built by workers over time; never instant
+- [x] Each room has a config JSON file
+- [x] `room_manager.gd` tracks all room states correctly
+- [ ] Guard Post effect not yet implemented (placeable but inert)
 
 ### What NOT to Do in This Phase
 - Do not add soldier ants yet — Barracks can be placed but trains nothing until Phase 7

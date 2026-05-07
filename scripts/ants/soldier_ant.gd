@@ -68,7 +68,7 @@ func setup(
 	_hp = _max_hp
 	_update_hp_bar()
 	_fit_sprite_to_tile()
-	GameManager.register_ant()
+	GameManager.register_soldier()
 
 
 func _load_config() -> void:
@@ -106,7 +106,7 @@ func _exit_tree() -> void:
 	if _current_rally_job != null:
 		GameManager.job_queue.release_job(_current_rally_job.id)
 		_current_rally_job = null
-	GameManager.unregister_ant()
+	GameManager.unregister_soldier()
 
 
 func _process(delta: float) -> void:
