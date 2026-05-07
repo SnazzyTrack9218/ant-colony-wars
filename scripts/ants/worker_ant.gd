@@ -87,12 +87,18 @@ func _try_claim_job() -> void:
 	if not is_instance_valid(_tile_map):
 		return
 	var job = GameManager.job_queue.claim_best_job(
-			_tile_pos, self, WORKER_JOB_TYPES)
+			_tile_pos, self, _valid_job_types())
 	if job != null:
 		_current_job = job
 		_start_moving_to_job()
 	else:
 		_start_wander()
+
+
+func _valid_job_types() -> Array:
+	if GameManager.colony.food >= GameManager.colony.max_food:
+		return [JobQueue.TYPE_DIG]
+	return WORKER_JOB_TYPES
 
 
 func _start_moving_to_job() -> void:

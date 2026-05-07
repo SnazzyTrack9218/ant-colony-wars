@@ -40,14 +40,18 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
 ### Still Needed Before Phase 1 is Done
 - [ ] Open Godot 4.6, import project — confirm no errors in FileSystem panel
-- [ ] Assign worker ant sprite in Sprite2D (use AssetLoader in worker_ant.gd _ready, or assign texture in main.gd after spawning)
 - [ ] Press F5 — confirm workers appear, move, dig
-- [ ] Place 3 dig markers — all 3 get dug
+- [ ] Click deep dirt tile — verify orange markers appear along full tunnel path to target
+- [ ] Ants dig path tiles one by one until target is reached
 - [ ] Idle worker auto-finds food, food counter increments
+- [ ] Food counter hits max → ants stop gathering and dig instead
 - [ ] No null-reference errors in Output
 
 ### Known Gap to Fix
 - [x] Worker ant Sprite2D — `_ready()` assigns `AssetLoader.get_ant_sprite("worker")`
+- [x] JobType enum circular reference — replaced with plain int constants
+- [x] Ants don't stop gathering when food full — filtered in `_valid_job_types()`
+- [x] Click-per-tile digging — replaced with auto-path dig (BFS from tunnel to target)
 
 ---
 

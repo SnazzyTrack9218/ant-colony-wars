@@ -163,24 +163,69 @@ func _spawn_worker(tile_pos: Vector2i) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var tile_pos := _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
-		_try_place_dig_marker(tile_pos)
+		_try_place_dig_target(tile_pos)
 
 
-func _try_place_dig_marker(tile_pos: Vector2i) -> void:
-	# Bounds check.
-	if tile_pos.x < 0 or tile_pos.x >= _world_w or tile_pos.y < 0 or tile_pos.y >= _world_h:
+func _try_place_dig_target(target: Vector2i) -> void:
+	if target.x < 0 or target.x >= _world_w or target.y < 0 or target.y >= _world_h:
 		return
-	# Only place on dirt tiles.
-	if _tile_map.get_cell_source_id(tile_pos) != _sid["dirt"]:
+	if _tile_map.get_cell_source_id(target) != _sid["dirt"]:
 		return
-	# Protected tiles (queen chamber) cannot be dug.
-	if tile_pos in _protected:
+	if target in _protected:
 		return
-	# Duplicate marker guard.
-	if tile_pos in _dig_marker_nodes:
+	if target in _dig_marker_nodes:
 		return
-	_add_dig_marker(tile_pos)
-	GameManager.job_queue.add_job(JobQueue.TYPE_DIG, tile_pos)
+	var path := _find_dig_path(target)
+	for p in path:
+		if p in _dig_marker_nodes:
+			continue
+		_add_dig_marker(p)
+		GameManager.job_queue.add_job(JobQueue.TYPE_DIG, p)
+
+
+func _find_dig_path(target: Vector2i) -> Array:
+	# Multi-source BFS starting from all existing tunnel tiles, expanding only
+	# through dirt, until the target is reached. Returns the dirt tiles in
+	# dig order (nearest to tunnel first).
+	var queue: Array = []
+	var came_from: Dictionary = {}
+
+	for y in range(_surface_row, _world_h):
+		for x in range(_world_w):
+			var pos := Vector2i(x, y)
+			var src := _tile_map.get_cell_source_id(pos)
+			if src == _sid["tunnel"] or src == _sid["queen"]:
+				came_from[pos] = null
+				queue.append(pos)
+
+	var found := false
+	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	while not queue.is_empty():
+		var current: Vector2i = queue.pop_front()
+		if current == target:
+			found = true
+			break
+		for dir in dirs:
+			var nb: Vector2i = current + dir
+			if nb in came_from:
+				continue
+			if nb.x < 0 or nb.x >= _world_w or nb.y < 0 or nb.y >= _world_h:
+				continue
+			if nb in _protected:
+				continue
+			if _tile_map.get_cell_source_id(nb) == _sid["dirt"]:
+				came_from[nb] = current
+				queue.append(nb)
+
+	if not found:
+		return []
+
+	var path: Array = []
+	var node: Vector2i = target
+	while came_from[node] != null:
+		path.push_front(node)
+		node = came_from[node]
+	return path
 
 
 func _add_dig_marker(tile_pos: Vector2i) -> void:
