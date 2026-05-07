@@ -192,10 +192,13 @@ func _do_gather() -> void:
 	var food_tile: Vector2i = _current_job.tile_pos
 	GameManager.add_food(1)
 	GameManager.job_queue.complete_job(_current_job.id)
-	# Re-add gather job so the source is persistent.
-	GameManager.job_queue.add_job(JobQueue.TYPE_GATHER, food_tile)
 	_current_job = null
+	# Enter idle NOW while the food job is gone — ant will score dig jobs
+	# before food reappears, so it can be pulled underground if work is waiting.
 	_enter_idle()
+	await get_tree().process_frame
+	if is_instance_valid(self):
+		GameManager.job_queue.add_job(JobQueue.TYPE_GATHER, food_tile)
 
 
 # ── BFS pathfinding ───────────────────────────────────────────────────────────
