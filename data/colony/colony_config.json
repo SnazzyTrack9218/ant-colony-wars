@@ -1,5 +1,5 @@
 {
-    "starting_workers": 3,
+    "starting_workers": 5,
     "starting_food": 0,
     "max_food": 200,
     "food_source_count": 4,

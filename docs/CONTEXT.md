@@ -38,7 +38,7 @@ The player never directly changes the world. Every action goes through a marker:
 
 | Marker | Input | Who Claims | Effect |
 |---|---|---|---|
-| **Dig Marker** | Left-click dirt tile | Worker | Digs tile → tunnel tile |
+| **Dig Marker** | Left-click any dirt tile | Worker | BFS from tunnel network to target; Dig Markers + DIG jobs queued for every tile along the shortest path |
 | **Gather Marker** | Left-click food source | Worker | Hauls food to storage |
 | **Room Plan Marker** | Click empty tunnel, choose type | Worker | Builds room over time |
 | **Rally Marker** | Right-click location | Soldier | Soldiers move there; engage enemies en route |
@@ -110,6 +110,9 @@ Full details: [`docs/AUTONOMY_DESIGN.md`](AUTONOMY_DESIGN.md)
 12. **Ants must claim jobs from `job_queue.gd`.** Do not assign targets to ants directly from UI or world scripts.
 13. **Priority weights must come from `colony_state.priorities`.** Never hardcode a priority value in an ant script.
 14. **Rooms do not appear instantly.** All room construction flows through BUILD jobs and worker delivery. Debug mode only exception.
+15. **All game-state mutations go through `GameManager` command functions.** No direct node mutation from UI or world scripts. Every command must be serializable (name + params as Dictionary) for future RPC.
+16. **No hardcoded `colony_id = 0`.** Every colony-specific function accepts a `colony_id` parameter, even in single-player. This makes two-colony multiplayer a configuration change, not a rewrite.
+17. **Tile changes go through a `WorldState` layer, not directly via `_tile_map.set_cell`.** Validate position, bounds, and protection rules in one place. (Implement this layer before Phase 9.)
 
 ---
 
@@ -136,14 +139,16 @@ scenes/rooms/nursery.tscn      <- node tree
 ## Multiplayer Rules
 
 - Architecture: Godot ENet high-level multiplayer API
-- Server is authoritative for all game state
-- Clients send command packets: `place_marker`, `set_priority`, `approve_room_plan`, `send_raid`
+- Server is authoritative for all game state; clients never invent world state
+- Clients send command packets only — `place_marker`, `set_priority`, `approve_room_plan`, `send_raid`, `purchase_upgrade` — never final state
 - Server validates every command before applying it
-- Clients predict ant movement locally (visual only) but server corrects on mismatch
+- Clients predict ant movement locally (visual only); server corrects on mismatch
 - Never call `rpc()` from client to directly mutate enemy colony state
+- World generation is seeded and deterministic — same seed must produce the same map on every machine
+- All colony-specific calls carry a `colony_id` parameter (see Current Rules #16)
 - Headless server build must run without crash
 
-Do not implement any of this until Phase 7.
+Do not implement networking until Phase 10. Do implement `colony_id` params and command-function routing in single-player so Phase 9 local multiplayer is an easy extension, not a rewrite.
 
 ---
 
@@ -208,11 +213,13 @@ res://
 
 ## Current Development Phase
 
-**Phase 1 — Single-Player Colony Prototype** (in progress)
+**Phase 3 — Ant Autonomy & World Quality** (in progress)
 
 ---
 
 ## Systems Already Built
+
+Phases 0–2 complete. Phase 3 in progress.
 
 - `scripts/assets/asset_loader.gd` — AssetLoader autoload (placeholder fallback)
 - `data/ASSET_MANIFEST.json` — asset path registry
@@ -220,32 +227,46 @@ res://
 - `process_assets.py` + `tools/pipeline/` — sprite sheet processing pipeline
 - All 20 placeholder PNGs in `assets/sprites/`
 - `scripts/core/game_manager.gd` — autoload; food signals; ant count tracking
-- `scripts/core/colony_state.gd` — food, max_food, ant_count, priorities dict
-- `scripts/core/job_queue.gd` — JobType enum, Job class, claim/release/complete/score
-- `scripts/ants/worker_ant.gd` — 4-state FSM (IDLE/MOVING/WORKING/IDLE_WANDER) + BFS
-- `scripts/main.gd` — world setup, tileset, input, worker spawning, food sources
+- `scripts/core/colony_state.gd` — food, max_food, ant_count, priorities dict; cycle_priority; resource_urgency
+- `scripts/core/job_queue.gd` — plain int TYPE_DIG/TYPE_GATHER constants (not enum — inner-class enum causes circular parse failure), Job class, 5-term scored claim/release/complete
+- `scripts/ants/worker_ant.gd` — 4-state FSM (IDLE/MOVING/WORKING/IDLE_WANDER) + BFS; single-destination dig self-navigation (`_move_toward_dig_dest`, `_find_next_dig_tile`); 5 starting workers; skips GATHER when food maxed; re-evaluates all jobs before re-adding food source; emergency re-score via signal
+- `scripts/main.gd` — world setup, tileset, input, worker spawning, food sources; single-marker dig (no pre-queued path tiles)
 - `scripts/ui/hud.gd` — food counter and worker count labels
+- `scripts/ui/priority_panel.gd` — HUD priority controls for all 8 categories (built in code)
 - `scenes/main/main.tscn` — root scene; TileMapLayer, Ants, markers, Camera2D, HUD
 - `scenes/ants/worker_ant.tscn` — worker ant node with Sprite2D
 - `scenes/ui/hud.tscn` — CanvasLayer with food/ant labels
+- `scenes/ui/priority_panel.tscn` — priority panel scene
 - `data/ants/worker_config.json` — move_speed, dig_duration
 - `data/colony/colony_config.json` — world size, queen position, starting workers
+- `data/colony/priority_weights.json` — low/normal/high/emergency priority multipliers
 - All planning docs
 
 ---
 
 ## Systems Not Built Yet
 
-- Worker ant sprite assigned (Sprite2D has no texture yet — Phase 1 pending Godot import)
-- Priority Panel UI (Phase 2)
-- Full job score formula with danger/urgency terms (Phase 2)
-- Room placement (Room Plan Markers) (Phase 3)
-- Enemy spawning and combat (Phase 4)
-- Soldier ant FSM (Phase 4)
-- Upgrades system (Phase 5)
-- Local multiplayer (Phase 6)
-- Online multiplayer (Phase 7)
-- Steam integration (Phase 8)
+- Auto-explore: idle workers wander toward unexplored areas (Phase 3)
+- Auto-gather: workers discover food without player markers (Phase 3)
+- Procedural world generator — replace hand-coded layout (Phase 3)
+- 120×80 map size (Phase 3)
+- Worker sprite animation — static placeholder, no walk cycle (Phase 3 / Phase 11)
+- Main menu, settings, keybinds, SFX, music (Phase 4)
+- `audio_manager.gd` autoload (Phase 4)
+- Dark minimal UI visual design language — `ui_theme.gd`, dot-row priority panel, outlined dig markers (Phase 5)
+- Room placement and BUILD jobs (Phase 6)
+- Room types: Nursery, Food Storage, Barracks, Mushroom Farm, Guard Post (Phase 6)
+- `room_manager.gd` (Phase 6)
+- Soldier ant FSM (Phase 7)
+- Enemy spawning and combat (Phase 7)
+- HP bars (Phase 7)
+- Repair, Emergency, Patrol, Fortify markers (Phase 8)
+- Upgrade system (Phase 8)
+- Seeded deterministic world generation (Phase 9)
+- Pheromone trails and job clustering (Phase 9)
+- Local multiplayer (Phase 10)
+- Online multiplayer with authoritative server (Phase 11)
+- Steam integration (Phase 12)
 
 ---
 
@@ -266,3 +287,7 @@ res://
 13. **Hardcoding priority weights** — always read from `colony_state.priorities`.
 14. **Making rooms appear instantly** — rooms must be built by workers over time. No instant placement outside debug mode.
 15. **Calling `ant.move_to()` from outside the ant FSM** — movement decisions belong to the ant, not the caller.
+16. **Re-adding a persistent job before `_enter_idle()`** — if a gather job is re-added before the ant scores, the ant sees it at distance 0 and immediately re-claims it, starving all other job types. Always enter idle first, re-add the job one frame later.
+17. **Using inner-class enums that reference the outer class** — `class_name Foo` with `enum Bar` and `class Inner: var x: Foo.Bar` causes a GDScript circular parse failure. Use plain `const` integers instead.
+18. **Mutating the TileMap directly from any script** — all tile changes must go through a validation layer before calling `set_cell`. This is already needed for multiplayer command validation; build it right the first time.
+19. **Hardcoding `colony_id = 0`** — every colony-specific function must accept a `colony_id` parameter. Passing `0` is fine in single-player; skipping the param entirely blocks multiplayer without a rewrite.

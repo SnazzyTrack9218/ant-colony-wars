@@ -1,0 +1,6 @@
+{
+    "low": 0.5,
+    "normal": 1.0,
+    "high": 1.5,
+    "emergency": 2.5
+}

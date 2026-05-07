@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/priority_panel.gd" id="1_priority_panel"]
+
+[node name="PriorityPanel" type="Control"]
+offset_left = 1028.0
+offset_top = 10.0
+offset_right = 1268.0
+offset_bottom = 280.0
+script = ExtResource("1_priority_panel")

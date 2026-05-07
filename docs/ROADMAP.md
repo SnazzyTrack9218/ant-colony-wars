@@ -2,6 +2,14 @@
 
 Build one phase at a time. Do not start the next phase until acceptance criteria for the current phase pass.
 
+## Long-Term Design Commitments
+
+- The final game is multiplayer-first at the architecture level, even while single-player is built first.
+- Maps will be much larger than the current prototype world.
+- Worlds will be procedurally generated from deterministic seeds, similar to a Minecraft-style seed flow: the same seed must produce the same terrain, food distribution, chambers, obstacles, and starting colony positions on every machine.
+- Multiplayer must share only the seed plus validated player commands where possible; clients must never invent map state locally.
+- Large seeded maps require chunk-aware generation, deterministic pathfinding inputs, and performance budgets for many ants, rooms, jobs, and soldiers.
+
 ---
 
 ## Phase 0 — Project Setup ✓
@@ -79,46 +87,48 @@ Build one phase at a time. Do not start the next phase until acceptance criteria
 
 ---
 
-## Phase 1 — Single-Player Colony Prototype
+## Phase 1 — Single-Player Colony Prototype ✓
 
 **Goal:** A playable bare-bones colony driven by markers and a simple job queue. Player places markers; ants execute them autonomously.
 
 ### Design Summary
-The player is the colony brain. The player places Dig Markers on dirt tiles. Workers see the jobs in the queue, score them by distance and availability, claim the best one, pathfind to it, and dig. Workers also auto-seek food when idle. Nothing moves because the player told it to — everything moves because an ant scored and claimed a job.
+The player is the colony brain. Clicking a dirt tile places ONE Dig Marker (destination). The claiming ant autonomously navigates through existing tunnel and digs its own path to the destination — one tile at a time, updating as new tunnel opens. Workers also auto-seek food and stop gathering when food is maxed.
 
 ### Features
-- TileMap with `dirt_tile`, `tunnel_tile`, and `stone_tile` tile types
-- Left-click a dirt tile → Dig Marker placed (visual indicator + job added to queue)
-- `job_queue.gd` — stores pending jobs; ants claim, execute, and release jobs through this system
+- TileMap with `dirt_tile`, `tunnel_tile`, `stone_tile`, `queen` tile types (TileSet built in code via AssetLoader)
+- Left-click dirt tile → multi-source BFS from whole tunnel network → Dig Markers + DIG jobs for all tiles along shortest path to target
+- `job_queue.gd` — TYPE_DIG / TYPE_GATHER int constants, Job class, claim/release/complete/score
 - Worker ant scene with 4-state FSM: `IDLE → MOVING → WORKING → IDLE_WANDER`
-- Workers score available jobs by: `priority_weight + distance_score` (simplified — no danger score yet)
-- BFS pathfinding for worker navigation around walls
-- Worker picks up nearest unclaimed DIG job; if no jobs, wanders near queen
-- Food tiles on the surface: idle workers auto-score GATHER jobs and carry food back
-- `colony_state.gd` — holds food count and basic priority dictionary (all `normal` to start)
-- `game_manager.gd` — autoload, holds global state, emits signals on state change
-- HUD: food counter label
-- Queen Chamber tile type — cannot have Dig Markers placed on it
+- Workers score jobs: `priority_weight + (10 / (distance + 1))` — simplified, no danger score yet
+- BFS pathfinding for worker navigation; unreachable jobs released and skipped
+- 5 starting workers — 4 handle food, 1+ available for digging at all times
+- Workers skip GATHER jobs when food is at max; re-evaluate all jobs before re-adding food source (prevents ants from looping on food forever)
+- `colony_state.gd` — food count, max_food, priority dictionary
+- `game_manager.gd` — autoload, food/ant-count signals
+- HUD: food counter and worker count labels
+- Queen Chamber — 3×3 protected tiles; cannot be dug
+- Camera: zoom=1.0, entire 60×40 tile world fits in 1280×720 viewport
 
-### Files Likely Changed
+### Files Changed
 - `scenes/main/main.tscn` — root scene with TileMap
 - `scenes/ants/worker_ant.tscn` — worker ant scene
-- `scenes/ui/hud.tscn` — food counter label
+- `scenes/ui/hud.tscn` — food and worker count labels
 - `scripts/core/game_manager.gd` — autoload
 - `scripts/core/colony_state.gd` — food, priority dictionary
-- `scripts/core/job_queue.gd` — claim/release/score API
-- `scripts/ants/worker_ant.gd` — FSM + BFS + job scoring
-- `scripts/ui/hud.gd` — updates food label from signal
-- `project.godot` — add GameManager autoload
+- `scripts/core/job_queue.gd` — plain int constants, claim/release/score API
+- `scripts/ants/worker_ant.gd` — FSM + BFS + job scoring + gather re-evaluation
+- `scripts/ui/hud.gd` — updates labels from signals
+- `scripts/main.gd` — auto-path dig, world gen, food sources
+- `project.godot` — display settings, autoloads
+- `data/colony/colony_config.json` — 5 starting workers
 
 ### Test Checklist
-- [ ] Press F5 — no errors
-- [ ] Left-click a dirt tile → Dig Marker visual appears
-- [ ] Worker walks to the marker (navigates around walls if needed)
-- [ ] Tile becomes tunnel after ant arrives; marker disappears
-- [ ] Place 3 markers — worker(s) dig all 3 in sequence or parallel
-- [ ] Idle worker auto-walks to food tile and carries it back; food counter increments
-- [ ] Cannot place Dig Marker on Queen Chamber tile
+- [ ] Press F5 — no errors, 5 workers visible and moving
+- [ ] Workers autonomously walk to surface food tiles; food counter increments
+- [ ] Left-click a deep dirt tile → orange markers trace full path from tunnel to target
+- [ ] Ants dig path tiles outward from tunnel; markers clear as each tile finishes
+- [ ] Fill food to 200 → ants switch from gathering to digging
+- [ ] Cannot place Dig Marker on Queen Chamber tiles
 - [ ] No null-reference errors in Output
 
 ### Acceptance Criteria
@@ -130,19 +140,16 @@ The player is the colony brain. The player places Dig Markers on dirt tiles. Wor
 - Zero errors on F5
 
 ### What NOT to Do in This Phase
-- Do not move ants directly from any script outside their FSM
-- Do not add priority levels yet — all jobs are equal weight (simplified scoring only)
-- No soldier ants
-- No room placement
-- No enemy spawning
-- No split-screen or multiplayer code
-- Do not build full A* — simple BFS is enough
+- No soldier ants, rooms, enemies, or multiplayer
+- Do not build full A* — BFS is sufficient
 
 ---
 
-## Phase 2 — Priority System & Job Score
+## Phase 2 — Priority System & Job Score ✓
 
 **Goal:** Give the player meaningful colony-level control. Workers make smarter decisions based on priorities. The colony brain has real levers to pull.
+
+**Status:** Implementation started. Priority cycling, JSON priority weights, scored jobs, emergency re-score, and the HUD Priority Panel are in place. Godot editor/runtime validation is still required.
 
 ### Design Summary
 Phase 1 workers pick the nearest available job. Phase 2 workers pick the *best* job based on a score that includes colony priorities, distance, resource urgency, and whether the colony is undercovered in a job category. The player can change priorities from the HUD Priority Panel.
@@ -188,48 +195,235 @@ Phase 1 workers pick the nearest available job. Phase 2 workers pick the *best* 
 - Score formula pulls weights from JSON, not hardcoded values
 
 ### What NOT to Do in This Phase
-- No room placement yet
-- No soldier ants yet
-- Do not add more job types — score existing types only
-- Do not add upgrade system yet
+- No rooms, soldiers, or upgrade system yet
 
 ---
 
-## Phase 3 — Rooms & Room Plan Markers
+## Phase 3 — Ant Autonomy & World Quality
 
-**Goal:** Player places room blueprints; workers autonomously build them over time.
+**Goal:** Ants feel alive. Workers explore, gather, and dig without constant player guidance. The world is bigger, procedurally generated, and ready for larger ant counts.
 
 ### Design Summary
-The player never places a finished room. They place a Room Plan Marker in cleared tunnel space. This creates a BUILD job in the queue. Workers score the BUILD job like any other, claim it, deliver resources to the site, and the room materialises once the build cost is paid. Rooms then produce colony outputs on timers driven by JSON config.
+Phase 2 workers are reactive: they only work jobs placed by the player. Phase 3 workers are proactive: they explore dark tunnels, automatically discover and gather food sources, and extend the tunnel network organically when idle. The static hand-crafted world is replaced by a procedural generator. The map grows to 120×80 tiles.
+
+### Features
+- **Single-destination dig**: player places ONE marker; ant self-navigates to the frontier and digs one tile at a time without pre-queued path tiles (implemented in Phase 2 — verified here)
+- **Auto-explore**: idle workers with no claimed jobs wander toward unexplored (unvisited) tunnel-adjacent dirt tiles; extend the tunnel network organically
+- **Auto-gather**: workers automatically detect nearby food sources during exploration; add GATHER jobs to the queue without requiring player markers
+- **Procedural food**: remove static food sources; replace with randomly placed food items generated at world-gen time; food positions from config (count, min/max distance from queen)
+- **World gen v2**: replace hand-coded layout with procedural generator — random rock formations, stone veins, cave pockets; all driven by `world_generation_config.json`
+- **Bigger world**: increase to 120×80 tiles; verify camera/zoom still covers it or add basic camera scrolling
+- **Chunk-dirty tracking**: only re-score jobs near tiles that actually changed (performance prep for large worlds)
+- **Worker sprite animation**: placeholder is static amber square — add basic 2-frame walk cycle using AssetLoader
+
+### Files Likely Changed
+- `scripts/core/world_generator.gd` — new file; procedural gen from config
+- `scripts/main.gd` — swap hand-coded layout for world_generator call; grow map to 120×80
+- `scripts/ants/worker_ant.gd` — add auto-explore wander logic; food discovery during wander
+- `scripts/core/job_queue.gd` — chunk-dirty flag on tile changes; skip re-score for unaffected jobs
+- `data/world/world_generation_config.json` — tile counts, stone density, food count/placement rules
+- `data/colony/colony_config.json` — update world_width / world_height
+
+### Test Checklist
+- [ ] Press F5 — 120×80 map generates; no layout errors
+- [ ] Idle workers wander into unvisited tunnel branches
+- [ ] Workers discover food automatically without player placing Gather Markers
+- [ ] Different `world_seed` values in config produce different maps
+- [ ] Stone veins and cave pockets visible in generated world
+- [ ] Dig marker placed deep → ant navigates autonomously; no pre-queued path tiles
+- [ ] No framerate drops on 120×80 map with 5+ workers
+
+### Acceptance Criteria
+- Procedural world generator replaces hand-coded layout entirely
+- Workers explore and gather without player markers
+- Map is 120×80 tiles minimum
+- No stuck ants or infinite wander loops
+
+### What NOT to Do in This Phase
+- No rooms, soldiers, or enemies
+- Do not add multiplayer code
+- Do not hardcode world gen constants — all values from JSON
+- Do not add camera edge-scrolling complexity if zoom=1 still fits the world
+
+---
+
+## Phase 4 — Main Menu & Settings
+
+**Goal:** The game has a proper entry point. Audio, settings, and keybinds are in place before more systems are layered on top.
+
+### Features
+- **Main menu scene** (`scenes/ui/main_menu.tscn`) — New Game, Settings, Quit
+- **Settings panel** — master volume, SFX volume, music volume, resolution, fullscreen toggle
+- **Keybinds panel** — rebindable actions stored in `data/settings/keybinds.json`; display current binding next to each action name
+- **SFX hooks**: dig complete, food gathered, ant spawned, queen damaged — all routed through `audio_manager.gd`
+- **Background music**: loop track during gameplay; crossfade between peace/alert states (alert triggered when enemies spawn)
+- **Save/load settings**: persist to `user://settings.json` on change; load on startup
+- **Compact in-game HUD**: collapse priority panel to icon-only row; expand on hover or toggle key
+- **Visual feedback on marker placement**: brief flash and particle burst when Dig Marker is placed
+- **`scripts/core/audio_manager.gd`** autoload — single entry point for all audio; never load audio inline in other scripts
+
+### Files Likely Changed
+- `scenes/ui/main_menu.tscn`
+- `scripts/ui/main_menu.gd`
+- `scenes/ui/settings_menu.tscn`
+- `scripts/ui/settings_menu.gd`
+- `scripts/core/audio_manager.gd` — new autoload
+- `project.godot` — register AudioManager autoload
+- `scripts/ui/hud.gd` — compact mode
+- `scenes/ui/hud.tscn`
+- `data/settings/keybinds.json`
+
+### Test Checklist
+- [ ] Launch game → main menu appears
+- [ ] New Game button loads the main game scene
+- [ ] Settings changes save to `user://settings.json`; restored after restart
+- [ ] Dig complete → SFX plays once; no duplicate sounds
+- [ ] Music loops during gameplay; no audio gap at loop point
+- [ ] Fullscreen toggle works on all target resolutions
+- [ ] Keybinds panel shows current binding; rebinding works without crash
+- [ ] Priority panel collapses to icons; expands on hover
+
+### Acceptance Criteria
+- Main menu functional with New Game / Settings / Quit
+- All SFX hooks fire at correct game moments
+- Settings persist between sessions
+- No audio loaded outside `audio_manager.gd`
+
+### What NOT to Do in This Phase
+- No rooms or soldiers
+- Do not add background music that requires real audio files — use silent AudioStreamPlayer stubs until real audio is ready
+- Do not block game launch on missing audio files
+
+---
+
+## Phase 5 — UI Visual Design Language
+
+**Goal:** Establish the dark, minimal, gradient aesthetic that all future UI inherits. Every pixel earns its place. Nothing visible that isn't needed in the next five seconds.
+
+### Design Principles
+- **Dark-first**: near-black backgrounds everywhere — no light grays, no white panels
+- **Gradient accents**: amber→orange for resources/workers; blue for markers/info; red for threats — never flat solid fills on accent elements
+- **Minimal**: at most 3–4 pieces of information visible at once; everything else collapsed or hidden until needed
+- **No clutter**: if a player hasn't asked for it, they don't see it
+
+### Color Palette (single source of truth in `ui_theme.gd`)
+
+| Token | Hex | Use |
+|---|---|---|
+| `BG_DARK` | `#0B0B0F` | Scene background, fullscreen overlay |
+| `PANEL_SURFACE` | `#12121C` | Panel, menu card background |
+| `PANEL_EDGE` | `#2A2A3F` | 1px top edge highlight (glass shelf) |
+| `TEXT_PRIMARY` | `#E8E8F0` | Labels, values |
+| `TEXT_MUTED` | `#5A5A72` | Secondary info, disabled state |
+| `ACCENT_AMBER` | `#FF9520` | Food icon, worker count, high priority |
+| `ACCENT_BLUE` | `#4A9FFF` | Dig marker outline, info elements |
+| `ACCENT_RED` | `#FF4040` | Queen HP, enemy presence, emergency |
+| `ACCENT_PURPLE` | `#A070FF` | Building/room markers |
+
+Panel gradient: linear top→bottom from `#14141E` to `#0B0B0F`.
+
+### HUD Layout (collapsed state)
+```
+[food_icon] 42 / 200          [⚙ 5 workers]
+                                              [priority dot-row]
+```
+- Top-left: food icon + `current / max` in `ACCENT_AMBER`, small text
+- Top-right: worker icon + count
+- Bottom-right corner: priority panel, collapsed to 8 color dots
+- Nothing else visible
+
+### Component Specs
+
+**Priority panel (collapsed):** 8 dots in a single row, 8px diameter. Dot color = current level:
+- `low` → `TEXT_MUTED` (grey)
+- `normal` → `TEXT_PRIMARY` (white)
+- `high` → `ACCENT_AMBER`
+- `emergency` → `ACCENT_RED`
+
+**Priority panel (expanded on hover):** slides up from bottom-right; each row shows icon + category name + level label + `−` / `+` buttons; max width 220px; `PANEL_SURFACE` background with `PANEL_EDGE` border; auto-collapses on mouse-leave.
+
+**Dig marker:** thin 1px `ACCENT_AMBER` outlined square, no fill, 70% alpha. Single pulse-fade animation (scale 1.0 → 1.15 → 1.0 over 250ms) on placement.
+
+**Buttons:** flat, no border radius; 1px `PANEL_EDGE` top edge; hover = `PANEL_SURFACE` fill at 20% brightness boost; active = 3px `ACCENT_AMBER` left strip.
+
+**Main menu card:** centered `PANEL_SURFACE` panel, gradient fill, 1px `PANEL_EDGE` border, game title in large `TEXT_PRIMARY`, three flat buttons stacked.
+
+### Features
+- `scripts/ui/ui_theme.gd` — color and StyleBox constants; no UI script defines a color anywhere else
+- Godot Theme resource built from `ui_theme.gd` constants and applied globally via `project.godot`
+- Redesigned HUD: food + worker count only; no extra labels
+- Priority panel: collapsed dot-row; smooth slide-up on hover; slide-down on leave
+- Dig marker visual: replace solid `ColorRect` with outlined square + placement pulse
+- Main menu: dark card layout using palette
+- Font size scale: 11px muted info / 13px primary labels / 16px headers — no other sizes
+
+### Files Likely Changed
+- `scripts/ui/ui_theme.gd` — new; color constants + StyleBox factory
+- `scenes/ui/hud.tscn` + `scripts/ui/hud.gd` — minimal layout
+- `scenes/ui/priority_panel.tscn` + `scripts/ui/priority_panel.gd` — dot-row collapse + expand animation
+- `scenes/ui/main_menu.tscn` + `scripts/ui/main_menu.gd` — dark card style
+- `scripts/main.gd` — dig marker visual: outlined rect with pulse tween
+
+### Test Checklist
+- [ ] HUD shows only food count + worker count; no other panels visible by default
+- [ ] Priority panel collapses to dot row; dots match current priority levels by color
+- [ ] Priority panel expands smoothly on hover; collapses on mouse-leave; no jump/flicker
+- [ ] Dig marker is a thin outline square; pulses once on placement; no solid fill
+- [ ] Main menu uses `BG_DARK` background, `PANEL_SURFACE` card, flat buttons
+- [ ] No white or light-gray backgrounds anywhere in the UI
+- [ ] All colors come from `ui_theme.gd`; zero per-node color overrides in `.tscn` files
+- [ ] Consistent font sizes: 11 / 13 / 16 only
+
+### Acceptance Criteria
+- Dark minimal aesthetic consistent across all current UI (HUD, priority panel, main menu)
+- `ui_theme.gd` is the single source of truth for every UI color and StyleBox
+- HUD has at most 2–3 visible info elements when collapsed
+- Priority panel collapsed by default
+
+### What NOT to Do in This Phase
+- Do not add UI for features that don't exist yet (rooms, soldiers, enemies)
+- Do not use Godot's default gray/blue theme anywhere
+- Do not add animations that block gameplay or take more than 250ms
+- Do not add tooltips or help text yet
+- Never define a color directly inside a `.tscn` file or `set_modulate` call — source from `ui_theme.gd`
+
+---
+
+## Phase 6 — Rooms & Colony Growth
+
+**Goal:** The colony expands structurally. Workers build rooms that produce colony outputs automatically.
+
+### Design Summary
+The player never places a finished room. They place a Room Plan Marker in cleared tunnel space. This creates a BUILD job. Workers claim it, deliver food to the site, and the room appears once the build cost is paid. Rooms then produce colony outputs on timers from JSON config.
 
 ### Features
 - Room Plan Marker: player opens menu, selects room type, clicks empty tunnel tile
 - BUILD job added to queue with `room_type`, `build_cost`, `location`
 - Worker BUILD state: pathfind to site, deliver one food per trip, update progress bar
-- Room appears when progress reaches `build_cost` (from config JSON)
+- Room appears when `build_cost` food delivered (from config JSON)
 - 6 room types with config JSON in `data/rooms/`:
   - **Queen Chamber** — marks queen's location; cannot be destroyed; queen HP bar
-  - **Nursery** — hatches egg on timer → adds 1 worker to colony
-  - **Food Storage** — raises max food cap; stores delivered food
+  - **Nursery** — hatches egg on timer → `GameManager.spawn_worker()`
+  - **Food Storage** — raises `colony_state.max_food`
   - **Soldier Barracks** — trains one soldier per timer tick (uses food)
   - **Mushroom Farm** — passive food income over time
   - **Guard Post** — increases nearby soldier detection radius
 - `room_manager.gd` — tracks placed and under-construction rooms
-- Under-construction visual: blueprint tint on room sprite + progress bar
-- Debug mode skips build time (set in `project.godot` `[debug]` section)
+- Under-construction visual: blueprint tint + progress bar
+- Debug mode skips build time (`[debug]` in `project.godot`)
 
 ### Files Likely Changed
-- `scripts/core/room_manager.gd`
-- `scripts/core/job_queue.gd` — add BUILD job type
+- `scripts/core/room_manager.gd` — new file
+- `scripts/core/job_queue.gd` — add TYPE_BUILD constant
 - `scripts/ants/worker_ant.gd` — add BUILD working state
 - `scripts/rooms/nursery.gd`, `food_storage.gd`, `soldier_barracks.gd`, `mushroom_farm.gd`, `guard_post.gd`
 - `scenes/rooms/*.tscn` — one scene per room type
 - `data/rooms/*_config.json` — build_cost, timer, output per room
 
 ### Test Checklist
-- [ ] Place Room Plan Marker → blueprint appears, BUILD job in queue
-- [ ] Worker claims BUILD job, carries food to site, progress increments
-- [ ] Nursery appears after build completes; hatches egg after timer; worker count increases
+- [ ] Place Room Plan Marker → blueprint appears; BUILD job in queue
+- [ ] Worker claims BUILD job; carries food to site; progress increments
+- [ ] Nursery completes → hatches egg after timer; worker count increases
 - [ ] Food Storage raises max food shown in HUD
 - [ ] Debug mode: room appears instantly
 - [ ] Cannot place Room Plan Marker on dirt or stone tile
@@ -238,39 +432,32 @@ The player never places a finished room. They place a Room Plan Marker in cleare
 - All 6 room types placeable and functional
 - Rooms built by workers over time; never instant outside debug
 - Each room has a config JSON file
-- room_manager.gd tracks all room states correctly
+- `room_manager.gd` tracks all room states correctly
 
 ### What NOT to Do in This Phase
-- No soldier ants yet
+- No soldier ants yet — Barracks can be placed but trains nothing until Phase 7
 - No enemies
 - Do not hardcode room stats — all values from config JSON
-- Do not add upgrades yet
 
 ---
 
-## Phase 4 — Soldiers & Combat
+## Phase 7 — Combat & Enemies
 
-**Goal:** Soldiers defend the nest and can raid the enemy. Combat is autonomous; player directs via markers and priorities.
+**Goal:** The colony faces threats. Soldiers defend autonomously; the player directs them with markers and priorities.
 
 ### Design Summary
-Soldiers are trained by the Barracks (Phase 3). They patrol near the queen by default. When enemies spawn, soldiers automatically engage based on `defense` priority. The player can redirect soldiers with Rally Markers and push them into enemy territory with Raid Rally Markers. Soldiers never wait for explicit orders — they always have something to do.
+Soldiers are trained by the Barracks (Phase 6). They patrol near the queen by default. Enemies spawn from world edges. Soldiers auto-engage based on `defense` priority. The player can redirect soldiers with Rally Markers and push them into enemy territory.
 
 ### Features
-- Soldier ant type with 4-state FSM: `IDLE → MOVING → FIGHTING → IDLE`
-- Soldier IDLE behavior scales with defense priority:
-  - `low`: soldiers only fight if directly attacked
-  - `normal`: soldiers patrol within N tiles of queen; engage any enemy nearby
-  - `high`: soldiers actively seek and chase enemies in a larger radius
-  - `emergency`: all soldiers rush toward any known enemy immediately
-- **Rally Marker** (right-click): soldiers score and claim RALLY jobs; engage enemies en route; timeout after arrival
-- **Raid Rally Marker** (right-click enemy territory): soldiers push toward enemy queen; fight anything in the way
-- Spider enemy type: spawns from world edge on timer, walks toward queen in straight line
-- Beetle enemy type: slower, higher HP
-- Enemies do not pathfind — straight-line movement only until Phase 5
+- Soldier ant type with FSM: `IDLE_PATROL → ENGAGE → RETURN`
+- Soldiers auto-engage enemies within detection radius; radius scales with `defense` priority
+- **Rally Marker** (right-click): soldiers path to it and hold position
+- **Raid Rally Marker** (right-click enemy territory): soldiers push toward enemy queen
+- Spider enemy: spawns from world edges on timer; walks toward queen
+- Beetle enemy: slower, higher HP
 - HP bars above all ants and enemies
-- `enemy_spawner.gd` — spawns enemies on timer; escalating difficulty curve from config
+- `enemy_spawner.gd` + `data/enemies/*_config.json`
 - Queen death → game over screen
-- `data/enemies/spider_config.json`, `beetle_config.json` — HP, damage, speed
 
 ### Files Likely Changed
 - `scripts/ants/soldier_ant.gd`
@@ -279,7 +466,6 @@ Soldiers are trained by the Barracks (Phase 3). They patrol near the queen by de
 - `scenes/enemies/spider.tscn`, `beetle.tscn`
 - `scripts/core/enemy_spawner.gd`
 - `scripts/core/job_queue.gd` — add RALLY, RAID, PATROL job types
-- `scripts/core/colony_state.gd` — add enemy awareness list
 - `data/enemies/spider_config.json`, `beetle_config.json`
 
 ### Test Checklist
@@ -287,51 +473,36 @@ Soldiers are trained by the Barracks (Phase 3). They patrol near the queen by de
 - [ ] Enemies walk toward queen; queen takes damage on contact
 - [ ] Soldier on `normal` defense patrols near queen; engages enemy within radius
 - [ ] Right-click in tunnel → Rally Marker placed; soldiers pathfind to it
-- [ ] Soldiers attack enemies during movement without extra player input
 - [ ] Set defense to `emergency` → all soldiers rush nearest enemy immediately
 - [ ] HP bars visible and decrease correctly
 - [ ] Queen dies → game over screen
 - [ ] No framerate drops with 15 soldiers + 10 enemies
 
 ### Acceptance Criteria
-- Soldiers autonomous — defend without explicit orders when defense priority is non-low
+- Soldiers defend without explicit orders when `defense` priority is non-low
 - Player can redirect soldiers with Rally Markers
 - Two enemy types functional
 - Game over triggers on queen death
-- No stuck soldiers or pathfinding loops
 
 ### What NOT to Do in This Phase
-- No A* for enemies — straight-line only
+- No A* for enemies — straight-line approach only
 - No multiplayer code
-- No new room types
-- Do not rewrite room system from Phase 3
+- Do not rewrite the room system
 
 ---
 
-## Phase 5 — Full Marker Set & Upgrades
+## Phase 8 — Full Marker Set & Upgrades
 
 **Goal:** Complete the marker vocabulary. Add efficiency upgrades.
 
-### All Marker Types
+### New Markers in This Phase
 
-| Marker | Phase Added |
-|---|---|
-| Dig | Phase 1 |
-| Gather | Phase 1 (auto-gather) → explicit marker here |
-| Room Plan | Phase 3 |
-| Rally | Phase 4 |
-| Raid Rally | Phase 4 |
-| Repair | **Phase 5** |
-| Emergency | **Phase 5** |
-| Patrol Zone | **Phase 5** |
-| Fortify | **Phase 5** |
-
-### New Phase 5 Markers
-
-- **Repair Marker** — left-click damaged room/wall; worker repairs and removes marker
-- **Emergency Marker** — shift+right-click; all idle ants re-score, prioritizing location; one at a time
-- **Patrol Zone** — drag on tunnel area; soldiers loop back and forth between endpoints
-- **Fortify** — left-click tunnel entrance; soldier stands guard, attacks anything entering
+| Marker | Input | Effect |
+|---|---|---|
+| Repair | Left-click damaged room/wall | Worker repairs and removes marker |
+| Emergency | Shift+right-click | All idle ants re-score toward location |
+| Patrol Zone | Drag on tunnel area | Soldiers loop between endpoints |
+| Fortify | Left-click tunnel entrance | Soldier stands guard; attacks on entry |
 
 ### Upgrade System
 Upgrades purchased with food from the HUD upgrades panel.
@@ -344,26 +515,26 @@ Upgrades purchased with food from the HUD upgrades panel.
 | Faster Hatch | nursery timer shorter | `nursery_config.json` |
 | Soldier Damage + | base damage multiplier | `soldier_config.json` |
 
-All upgrade levels and costs live in `data/upgrades/upgrades_config.json`.
+All levels and costs in `data/upgrades/upgrades_config.json`.
 
 ### Files Likely Changed
 - `scripts/core/job_queue.gd` — REPAIR, EMERGENCY, PATROL, FORTIFY job types
-- `scripts/ants/worker_ant.gd` — handle REPAIR
-- `scripts/ants/soldier_ant.gd` — handle PATROL, FORTIFY
+- `scripts/ants/worker_ant.gd` — REPAIR state
+- `scripts/ants/soldier_ant.gd` — PATROL, FORTIFY states
 - `scripts/ui/upgrades_panel.gd` + `scenes/ui/upgrades_panel.tscn`
 - `data/upgrades/upgrades_config.json`
 
 ### Test Checklist
 - [ ] Repair Marker on damaged room → worker repairs; marker removed when done
 - [ ] Emergency Marker → all idle ants immediately re-score toward it
-- [ ] Patrol Zone → soldiers loop back and forth indefinitely
-- [ ] Fortify → soldier stands at entrance; attacks first enemy that enters
-- [ ] Purchase Dig Speed upgrade → workers dig noticeably faster
+- [ ] Patrol Zone → soldiers loop indefinitely
+- [ ] Fortify → soldier holds position; attacks first enemy that enters
+- [ ] Dig Speed upgrade noticeably speeds up workers
 - [ ] Upgrade costs correctly deducted from food count
 
 ### Acceptance Criteria
-- All 9 marker types functional
-- Upgrade system reads from JSON, applies multipliers correctly
+- All marker types functional
+- Upgrade system reads from JSON; applies multipliers correctly
 - Priority system interacts correctly with all marker types
 
 ### What NOT to Do in This Phase
@@ -373,25 +544,67 @@ All upgrade levels and costs live in `data/upgrades/upgrades_config.json`.
 
 ---
 
-## Phase 6 — Local Multiplayer Prototype
+## Phase 9 — Advanced Colony AI & Seeded World Scale
+
+**Goal:** Make the colony feel self-organizing at large scale. Establish deterministic seeded generation required for multiplayer.
+
+### Features
+- **Seeded world generation**: same seed → same terrain, food positions, stone veins, chamber layout on every machine; seed displayed in lobby and saved with save file
+- **Dynamic job clustering**: ants group on nearby dig/build jobs; diminishing returns prevent all ants piling onto one tile
+- **Emergency auto-escalation**: low food, queen damage, or critical room damage temporarily raises the relevant priority to `emergency`; restores previous level when crisis ends; never permanently overrides player-set priorities
+- **Path optimization**: when `food` priority is high, colony can auto-queue tunnel expansion toward known food sources
+- **Room auto-maintenance**: when `repair` priority is above normal, workers generate REPAIR jobs for damaged structures without Repair Markers
+- **Pheromone trails**: high-traffic paths gain temporary movement speed bonuses, encouraging natural highways
+
+### Files Likely Changed
+- `scripts/core/world_generator.gd` — add seed parameter; make generation fully deterministic
+- `scripts/core/job_clusterer.gd` — new file
+- `scripts/core/pheromone_map.gd` — new file
+- `scripts/core/colony_state.gd` — auto-escalation logic
+- `data/world/world_generation_config.json`
+- `data/colony/automation_config.json`
+
+### Test Checklist
+- [ ] Same seed → identical terrain after restart
+- [ ] Different seeds → meaningfully different maps
+- [ ] Nearby dig/build jobs attract small groups; other jobs still get workers
+- [ ] Low food auto-escalates food priority; later restores previous level
+- [ ] Pheromone paths speed up repeated ant traffic
+
+### Acceptance Criteria
+- Seeded generation is deterministic; ready for multiplayer
+- Advanced automation flows through priorities, markers, and the job queue — no direct world mutation
+- Performance stable on 120×80 map with 30+ ants
+
+### What NOT to Do in This Phase
+- No online networking yet
+- Do not let auto-expansion ignore queen/room protection rules
+- Do not let emergency auto-escalation permanently overwrite player-set priorities
+
+---
+
+## Phase 10 — Local Multiplayer Prototype
 
 **Goal:** Two colonies on one screen. Validate PvP mechanics before networking.
 
 ### Features
 - Split-screen: Player 1 controls left colony, Player 2 controls right colony
 - Shared TileMap — both colonies dig in the same world
+- Shared seeded map from Phase 9 generator
+- Seed selection UI for local matches
 - Victory condition: destroy enemy queen
 - No networking — both players on same keyboard or controllers
+- All game-state mutations go through `GameManager` command functions with `colony_id` parameter
 
 ### Files Likely Changed
 - `scenes/multiplayer/local_multiplayer.tscn`
 - `scripts/multiplayer/local_multiplayer_manager.gd`
-- `scripts/core/game_manager.gd` — extend for two-colony state
+- `scripts/core/game_manager.gd` — extend for two-colony state; `colony_id` on all colony calls
 
 ### Test Checklist
 - [ ] Both colonies start on opposite sides of TileMap
 - [ ] Each player controls their own colony independently
-- [ ] Soldiers from Colony A can attack Colony B's ants
+- [ ] Soldiers from Colony A attack Colony B's ants
 - [ ] Queen death ends game and declares winner
 - [ ] No shared resource bugs (food counters separate per colony)
 
@@ -403,29 +616,29 @@ All upgrade levels and costs live in `data/upgrades/upgrades_config.json`.
 ### What NOT to Do in This Phase
 - No network code
 - No Steam
-- Do not add new game mechanics not present in Phases 1–5
+- Do not add new game mechanics not present in Phases 1–8
 
 ---
 
-## Phase 7 — Online Multiplayer
+## Phase 11 — Online Multiplayer
 
 **Goal:** Two players over network. Server is authoritative.
 
 ### Features
 - Godot high-level multiplayer (ENet)
 - Dedicated server mode (headless)
+- Server selects or validates the map seed; all clients generate the same map from it
 - Clients send command packets only: `place_marker`, `set_priority`, `approve_room_plan`, `send_raid`
 - Server validates and applies all state changes
 - Basic lobby: host game, join via IP
 - Latency compensation: client-side prediction for ant movement only
 
 ### Client Command Packets (not game results)
-Clients never send final game state — only intent:
-- `place_marker(type, tile_pos, priority_level)`
-- `set_priority(category, level)`
-- `approve_room_plan(room_type, tile_pos)`
-- `cancel_marker(marker_id)`
-- `purchase_upgrade(upgrade_id)`
+- `place_marker(type, tile_pos, priority_level, colony_id)`
+- `set_priority(category, level, colony_id)`
+- `approve_room_plan(room_type, tile_pos, colony_id)`
+- `cancel_marker(marker_id, colony_id)`
+- `purchase_upgrade(upgrade_id, colony_id)`
 
 ### Files Likely Changed
 - `scripts/multiplayer/network_manager.gd`
@@ -437,7 +650,7 @@ Clients never send final game state — only intent:
 ### Test Checklist
 - [ ] Host on LAN, second machine joins by IP
 - [ ] Both players see identical game state
-- [ ] Server rejects invalid `place_marker` commands (e.g., on stone tile)
+- [ ] Server rejects invalid `place_marker` (e.g., on stone tile)
 - [ ] Disconnect handled gracefully
 - [ ] Server runs headless without crash
 
@@ -447,25 +660,25 @@ Clients never send final game state — only intent:
 - Disconnect handled
 
 ### What NOT to Do in This Phase
-- No Steam lobbies yet (Phase 8)
-- Do not trust any client data for game state decisions
+- No Steam lobbies yet (Phase 12)
+- Do not trust any client data for game-state decisions
 - Do not add new gameplay features
 
 ---
 
-## Phase 8 — Steam Polish
+## Phase 12 — Polish & Steam
 
-**Goal:** Ship-ready. Steam integration, polish, performance.
+**Goal:** Ship-ready. Steam integration, full audio, real art, stable performance.
 
 ### Features
 - Steamworks GDNative/GDExtension integration
 - Steam lobbies (host + join)
 - 5 achievements (e.g., "First Queen Kill", "100 Ants Raised", "Emergency Resolved")
-- Sound effects for dig, hatch, combat, victory
-- Background music tracks
+- Full SFX pass: dig, gather, hatch, combat hit, death, victory
+- Background music tracks with crossfade
 - Animated ant sprites (replace placeholder art)
-- Performance profiling: stable 60fps with 200 ants
-- Settings menu: resolution, volume, key rebinding
+- Performance profiling: stable 60fps with 200 ants + 20 enemies
+- Final UI polish pass
 
 ### Acceptance Criteria
 - Builds and runs on Steam

@@ -123,7 +123,7 @@ func _place_food_sources() -> void:
 	for i in range(4):
 		var food_pos := Vector2i(spacing + i * spacing, food_row)
 		_food_positions.append(food_pos)
-		GameManager.job_queue.add_job(JobQueue.JobType.GATHER, food_pos)
+		GameManager.job_queue.add_job(JobQueue.TYPE_GATHER, food_pos)
 		_spawn_food_visual(food_pos)
 
 
@@ -163,24 +163,20 @@ func _spawn_worker(tile_pos: Vector2i) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var tile_pos := _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
-		_try_place_dig_marker(tile_pos)
+		_try_place_dig_target(tile_pos)
 
 
-func _try_place_dig_marker(tile_pos: Vector2i) -> void:
-	# Bounds check.
-	if tile_pos.x < 0 or tile_pos.x >= _world_w or tile_pos.y < 0 or tile_pos.y >= _world_h:
+func _try_place_dig_target(target: Vector2i) -> void:
+	if target.x < 0 or target.x >= _world_w or target.y < 0 or target.y >= _world_h:
 		return
-	# Only place on dirt tiles.
-	if _tile_map.get_cell_source_id(tile_pos) != _sid["dirt"]:
+	if _tile_map.get_cell_source_id(target) != _sid["dirt"]:
 		return
-	# Protected tiles (queen chamber) cannot be dug.
-	if tile_pos in _protected:
+	if target in _protected:
 		return
-	# Duplicate marker guard.
-	if tile_pos in _dig_marker_nodes:
+	if target in _dig_marker_nodes:
 		return
-	_add_dig_marker(tile_pos)
-	GameManager.job_queue.add_job(JobQueue.JobType.DIG, tile_pos)
+	_add_dig_marker(target)
+	GameManager.job_queue.add_job(JobQueue.TYPE_DIG, target)
 
 
 func _add_dig_marker(tile_pos: Vector2i) -> void:
@@ -199,7 +195,7 @@ func _remove_dig_marker(tile_pos: Vector2i) -> void:
 
 
 func _on_job_completed(job: JobQueue.Job) -> void:
-	if job.type == JobQueue.JobType.DIG:
+	if job.type == JobQueue.TYPE_DIG:
 		_remove_dig_marker(job.tile_pos)
 
 

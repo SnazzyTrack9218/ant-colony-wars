@@ -1,7 +1,7 @@
 extends Node2D
 
 const TILE_SIZE: int = 16
-const WORKER_JOB_TYPES: Array = [JobQueue.JobType.DIG, JobQueue.JobType.GATHER]
+const WORKER_JOB_TYPES: Array = [JobQueue.TYPE_DIG, JobQueue.TYPE_GATHER]
 const DIRS: Array = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 enum State { IDLE, MOVING, WORKING, IDLE_WANDER }
@@ -12,9 +12,10 @@ var _dig_duration: float = 1.2
 
 # FSM
 var _state: State = State.IDLE
-var _current_job: JobQueue.Job = null
+var _current_job = null
 var _path: Array = []
 var _is_moving: bool = false
+var _move_tween: Tween
 
 # World references set by main.gd via setup()
 var _tile_map: TileMapLayer
@@ -50,7 +51,20 @@ func setup(
 	position = _tile_to_world(start_tile)
 	_load_config()
 	GameManager.register_ant()
+	GameManager.emergency_priority_set.connect(_on_emergency_priority_set)
 	_enter_idle()
+
+
+func _process(_delta: float) -> void:
+	if _current_job == null:
+		return
+	var category: String = _current_job.category
+	if GameManager.colony.priorities.get(category, "normal") == "emergency":
+		return
+	if not _any_other_emergency_priority():
+		return
+	if _state == State.MOVING or _state == State.IDLE_WANDER:
+		_interrupt_and_rescore()
 
 
 func _load_config() -> void:
@@ -86,8 +100,8 @@ func _enter_idle() -> void:
 func _try_claim_job() -> void:
 	if not is_instance_valid(_tile_map):
 		return
-	var job: JobQueue.Job = GameManager.job_queue.claim_best_job(
-			_tile_pos, self, WORKER_JOB_TYPES)
+	var job = GameManager.job_queue.claim_best_job(
+			_tile_pos, self, _valid_job_types(), Callable(self, "_get_job_distance"))
 	if job != null:
 		_current_job = job
 		_start_moving_to_job()
@@ -95,11 +109,63 @@ func _try_claim_job() -> void:
 		_start_wander()
 
 
+func _valid_job_types() -> Array:
+	if GameManager.colony.food >= GameManager.colony.max_food:
+		return [JobQueue.TYPE_DIG]
+	return WORKER_JOB_TYPES
+
+
 func _start_moving_to_job() -> void:
 	if _current_job == null:
 		_enter_idle()
 		return
+	if _current_job.type == JobQueue.TYPE_DIG:
+		_move_toward_dig_dest()
+		return
+	# GATHER — path directly to tile.
 	_path = _find_path(_tile_pos, _current_job.tile_pos)
+	if _path.is_empty():
+		if _can_work_current_job_from_here():
+			_start_working()
+		else:
+			GameManager.job_queue.release_job(_current_job.id)
+			_current_job = null
+			_start_wander()
+		return
+	_state = State.MOVING
+	_move_step()
+
+
+func _move_toward_dig_dest() -> void:
+	if _current_job == null:
+		_enter_idle()
+		return
+	var dest := _current_job.tile_pos
+	if _is_traversable(dest):
+		GameManager.job_queue.complete_job(_current_job.id)
+		_current_job = null
+		_enter_idle()
+		return
+	var next_tile := _find_next_dig_tile(dest)
+	if next_tile == Vector2i(-1, -1):
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+		_start_wander()
+		return
+	var dig_from: Array = []
+	for dir in DIRS:
+		var n: Vector2i = next_tile + dir
+		if _is_traversable(n):
+			dig_from.append(n)
+	if dig_from.is_empty():
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+		_start_wander()
+		return
+	if _tile_pos in dig_from:
+		_start_working()
+		return
+	_path = _bfs(_tile_pos, dig_from)
 	if _path.is_empty():
 		GameManager.job_queue.release_job(_current_job.id)
 		_current_job = null
@@ -112,8 +178,8 @@ func _start_moving_to_job() -> void:
 func _start_wander() -> void:
 	_state = State.IDLE_WANDER
 	var neighbors: Array = []
-	for dir: Vector2i in DIRS:
-		var n := _tile_pos + dir
+	for dir in DIRS:
+		var n: Vector2i = _tile_pos + dir
 		if _is_traversable(n):
 			neighbors.append(n)
 	if neighbors.is_empty():
@@ -140,9 +206,9 @@ func _move_step() -> void:
 	_is_moving = true
 	var next_tile: Vector2i = _path.pop_front()
 	_tile_pos = next_tile
-	var tween := create_tween()
-	tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
-	tween.tween_callback(_on_step_done)
+	_move_tween = create_tween()
+	_move_tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
+	_move_tween.tween_callback(_on_step_done)
 
 
 func _on_step_done() -> void:
@@ -166,29 +232,74 @@ func _start_working() -> void:
 		return
 	_state = State.WORKING
 	match _current_job.type:
-		JobQueue.JobType.DIG:
+		JobQueue.TYPE_DIG:
 			_do_dig()
-		JobQueue.JobType.GATHER:
+		JobQueue.TYPE_GATHER:
 			_do_gather()
 
 
 func _do_dig() -> void:
+	if _current_job == null:
+		_enter_idle()
+		return
+	var dest := _current_job.tile_pos
+	if _is_traversable(dest):
+		GameManager.job_queue.complete_job(_current_job.id)
+		_current_job = null
+		_enter_idle()
+		return
+	var next_tile := _find_next_dig_tile(dest)
+	if next_tile == Vector2i(-1, -1):
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+		_enter_idle()
+		return
+	# Verify adjacency — if not adjacent, re-position.
+	if abs(_tile_pos.x - next_tile.x) + abs(_tile_pos.y - next_tile.y) != 1:
+		_move_toward_dig_dest()
+		return
 	await get_tree().create_timer(_dig_duration).timeout
 	if not is_instance_valid(self) or _current_job == null or not is_instance_valid(_tile_map):
 		return
-	_tile_map.set_cell(_current_job.tile_pos, _sid_tunnel, Vector2i(0, 0))
-	GameManager.job_queue.complete_job(_current_job.id)
-	_current_job = null
-	_enter_idle()
+	_tile_map.set_cell(next_tile, _sid_tunnel, Vector2i(0, 0))
+	# Continue toward destination (loops until dest is reached or unreachable).
+	_move_toward_dig_dest()
 
 
 func _do_gather() -> void:
-	var food_tile := _current_job.tile_pos
+	var food_tile: Vector2i = _current_job.tile_pos
 	GameManager.add_food(1)
 	GameManager.job_queue.complete_job(_current_job.id)
-	# Re-add gather job so the source is persistent.
-	GameManager.job_queue.add_job(JobQueue.JobType.GATHER, food_tile)
 	_current_job = null
+	# Enter idle NOW while the food job is gone — ant will score dig jobs
+	# before food reappears, so it can be pulled underground if work is waiting.
+	_enter_idle()
+	await get_tree().process_frame
+	if is_instance_valid(self):
+		GameManager.job_queue.add_job(JobQueue.TYPE_GATHER, food_tile)
+
+
+func _on_emergency_priority_set(_category: String) -> void:
+	if _state == State.IDLE:
+		_try_claim_job()
+
+
+func _any_other_emergency_priority() -> bool:
+	for category in GameManager.colony.priorities:
+		if GameManager.colony.priorities[category] != "emergency":
+			continue
+		if _current_job == null or category != _current_job.category:
+			return true
+	return false
+
+
+func _interrupt_and_rescore() -> void:
+	if is_instance_valid(_move_tween):
+		_move_tween.kill()
+	_is_moving = false
+	if _current_job != null:
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
 	_enter_idle()
 
 
@@ -200,8 +311,8 @@ func _find_path(from: Vector2i, to: Vector2i) -> Array:
 		return _bfs(from, [to])
 	# Otherwise find traversable neighbors (DIG: reach adjacent tunnel).
 	var targets: Array = []
-	for dir: Vector2i in DIRS:
-		var n := to + dir
+	for dir in DIRS:
+		var n: Vector2i = to + dir
 		if _is_traversable(n):
 			targets.append(n)
 	if targets.is_empty():
@@ -209,9 +320,70 @@ func _find_path(from: Vector2i, to: Vector2i) -> Array:
 	return _bfs(from, targets)
 
 
+func _get_job_distance(job) -> int:
+	if job.type == JobQueue.TYPE_DIG:
+		var next_tile := _find_next_dig_tile(job.tile_pos)
+		if next_tile == Vector2i(-1, -1):
+			return -1
+		var dig_from: Array = []
+		for dir in DIRS:
+			var n: Vector2i = next_tile + dir
+			if _is_traversable(n):
+				dig_from.append(n)
+		if dig_from.is_empty():
+			return -1
+		if _tile_pos in dig_from:
+			return 0
+		var path := _bfs(_tile_pos, dig_from)
+		return path.size() if not path.is_empty() else -1
+	if _can_work_job_from_tile(job, _tile_pos):
+		return 0
+	var path := _find_path(_tile_pos, job.tile_pos)
+	if path.is_empty():
+		return -1
+	return path.size()
+
+
+func _can_work_current_job_from_here() -> bool:
+	return _current_job != null and _can_work_job_from_tile(_current_job, _tile_pos)
+
+
+func _can_work_job_from_tile(job, tile: Vector2i) -> bool:
+	match job.type:
+		JobQueue.TYPE_DIG:
+			return abs(job.tile_pos.x - tile.x) + abs(job.tile_pos.y - tile.y) == 1
+		JobQueue.TYPE_GATHER:
+			return job.tile_pos == tile
+	return false
+
+
+func _find_next_dig_tile(dest: Vector2i) -> Vector2i:
+	# BFS outward from dest through non-traversable tiles.
+	# Returns the non-traversable tile closest to dest that borders existing tunnel.
+	var queue: Array = [dest]
+	var visited: Dictionary = {dest: true}
+	while not queue.is_empty():
+		var current: Vector2i = queue.pop_front()
+		if not _is_traversable(current):
+			for dir in DIRS:
+				var n: Vector2i = current + dir
+				if _is_traversable(n):
+					return current
+		for dir in DIRS:
+			var n: Vector2i = current + dir
+			if n in visited:
+				continue
+			if n.x < 0 or n.x >= _world_w or n.y < 0 or n.y >= _world_h:
+				continue
+			if not _is_traversable(n):
+				visited[n] = true
+				queue.append(n)
+	return Vector2i(-1, -1)
+
+
 func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
 	var goal_set: Dictionary = {}
-	for g: Vector2i in goal_tiles:
+	for g in goal_tiles:
 		goal_set[g] = true
 	if from in goal_set:
 		return []  # Already at destination, no movement needed.
@@ -225,8 +397,8 @@ func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
 		if current in goal_set:
 			found = current
 			break
-		for dir: Vector2i in DIRS:
-			var neighbor := current + dir
+		for dir in DIRS:
+			var neighbor: Vector2i = current + dir
 			if neighbor in came_from:
 				continue
 			if not _is_traversable(neighbor):
@@ -238,7 +410,7 @@ func _bfs(from: Vector2i, goal_tiles: Array) -> Array:
 		return []
 
 	var path: Array = []
-	var node: Vector2i = found
+	var node = found
 	while came_from[node] != null:
 		path.push_front(node)
 		node = came_from[node]
