@@ -1,3 +1,23 @@
-[gd_scene format=3 uid="uid://b6d6k5a4yo6ln"]
+[gd_scene load_steps=3 format=3 uid="uid://b6d6k5a4yo6ln"]
 
-[node name="Node2D" type="Node2D" unique_id=146597284]
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="2_hud"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="TileMapLayer" type="TileMapLayer" parent="."]
+
+[node name="Ants" type="Node2D" parent="."]
+z_index = 2
+
+[node name="DigMarkers" type="Node2D" parent="."]
+z_index = 1
+
+[node name="FoodMarkers" type="Node2D" parent="."]
+z_index = 1
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(2, 2)
+
+[node name="HUD" parent="." instance=ExtResource("2_hud")]

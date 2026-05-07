@@ -5,85 +5,76 @@ Always read this file before starting any work session.
 
 ---
 
-## NOW — Phase 0.5: Asset Pipeline (Final Step)
-
-- [x] `pip install -r requirements.txt`
-- [x] `python process_assets.py --dry-run` — confirmed clean
-- [x] Asset pipeline tested end-to-end (grid crop, BG removal, export)
-- [x] `python process_assets.py --check` — all 5 categories show "coverage OK"
-- [x] `python tools/generate_placeholders.py` — all 20 placeholder PNGs generated
-- [x] ASSET_GUIDE.md updated with placeholder-first workflow
-- [ ] Open Godot, confirm 20 assets import with no errors in FileSystem panel
-- [ ] Phase 0.5 complete → move to Phase 1
-
----
-
-## NEXT — Phase 1: Single-Player Colony Prototype
+## NOW — Phase 1: Single-Player Colony Prototype
 
 Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
-The player is the colony brain. Ants are autonomous. Nothing moves because the player said so.
+### Core Systems ✓
+- [x] Create `scripts/core/game_manager.gd` — autoload; food signals; ant count tracking
+- [x] Create `scripts/core/colony_state.gd` — food, max_food, priorities dict
+- [x] Create `scripts/core/job_queue.gd` — JobType, Job class, claim/release/complete/score
+- [x] Register `GameManager` as autoload in `project.godot`
+- [x] Create `data/ants/worker_config.json` — move_speed, dig_duration
+- [x] Create `data/colony/colony_config.json` — world size, queen pos, starting workers
 
-### TileMap & World
-- [ ] Create `scenes/main/main.tscn` — TileMap with `dirt_tile`, `tunnel_tile`, `stone_tile` tile types
-- [ ] Queen Chamber tile type — Dig Markers cannot be placed on it
+### Worker Ant ✓
+- [x] Create `scenes/ants/worker_ant.tscn` — Node2D + Sprite2D
+- [x] Create `scripts/ants/worker_ant.gd` — 4-state FSM + BFS pathfinding
+- [x] IDLE: score unclaimed jobs; claim best; transition to MOVING
+- [x] MOVING: step along path with tweens; unclaim if no path
+- [x] WORKING (DIG): wait dig_duration → change tile to tunnel → complete job
+- [x] WORKING (GATHER): add food → re-add gather job → IDLE
+- [x] IDLE_WANDER: random neighbor walk → retry IDLE after delay
 
-### Core Systems
-- [ ] Create `scripts/core/game_manager.gd` — autoload; holds global state; emits signals on change
-- [ ] Create `scripts/core/colony_state.gd` — food count, basic priorities dictionary (all `normal`)
-- [ ] Create `scripts/core/job_queue.gd` — `add_job()`, `claim_job(ant)`, `release_job(job)`, `get_unclaimed_jobs()`
-- [ ] Register `GameManager` as autoload in `project.godot`
+### World & Main Scene ✓
+- [x] Create `scenes/main/main.tscn` — TileMapLayer, Ants, markers, Camera2D, HUD
+- [x] Create `scripts/main.gd` — world setup, tileset in code, food sources, input
+- [x] TileSet set up in code using AssetLoader (dirt, tunnel, stone, queen tiles)
+- [x] Left-click dirt tile → Dig Marker placed + DIG job added to queue
+- [x] Cannot place Dig Marker on queen chamber tiles (protected set)
+- [x] Camera centered over queen chamber at startup
 
-### Worker Ant
-- [ ] Create `scenes/ants/worker_ant.tscn` — worker ant scene with placeholder sprite
-- [ ] Create `scripts/ants/worker_ant.gd` — 4-state FSM: `IDLE → MOVING → WORKING → IDLE_WANDER`
-- [ ] IDLE: score unclaimed DIG and GATHER jobs; claim best; transition to MOVING
-- [ ] Score formula (Phase 1 simplified): `priority_weight + (10.0 / (distance + 1.0))`
-- [ ] MOVING: BFS pathfind to job tile; if no path, unclaim and return to IDLE
-- [ ] WORKING (DIG): brief pause → tile becomes tunnel_tile → marker removed → return to IDLE
-- [ ] WORKING (GATHER): carry food back to colony → food counter increments → return to IDLE
-- [ ] IDLE_WANDER: random short walk near queen; after arrival, re-enter IDLE scoring
-- [ ] Workers flee toward queen if enemy is within melee range (Phase 1 stub — no enemies yet, just the rule)
+### HUD ✓
+- [x] Create `scenes/ui/hud.tscn` — CanvasLayer with Food + Worker labels
+- [x] Create `scripts/ui/hud.gd` — connects to GameManager signals
 
-### Marker Input
-- [ ] Left-click dirt tile → Dig Marker placed (colored tile overlay) + DIG job added to queue
-- [ ] Left-click food tile → GATHER job added to queue (auto-gather also fires when workers are idle)
-- [ ] Cannot place Dig Marker on Queen Chamber tile
+### Still Needed Before Phase 1 is Done
+- [ ] Open Godot 4.6, import project — confirm no errors in FileSystem panel
+- [ ] Assign worker ant sprite in Sprite2D (use AssetLoader in worker_ant.gd _ready, or assign texture in main.gd after spawning)
+- [ ] Press F5 — confirm workers appear, move, dig
+- [ ] Place 3 dig markers — all 3 get dug
+- [ ] Idle worker auto-finds food, food counter increments
+- [ ] No null-reference errors in Output
 
-### HUD
-- [ ] Create `scenes/ui/hud.tscn` + `scripts/ui/hud.gd` — food counter label
-- [ ] HUD reads from signal emitted by `colony_state.gd`; HUD does not read game state directly
-
-### Phase 1 Acceptance Test
-- [ ] Press F5 — no errors
-- [ ] Place Dig Marker → worker walks to it and digs → no crash
-- [ ] Idle worker auto-finds food and carries it back → food counter increments
-- [ ] Place 3 markers → all 3 get dug in sequence or parallel
-- [ ] No direct ant control anywhere in the code
+### Known Gap to Fix
+- [x] Worker ant Sprite2D — `_ready()` assigns `AssetLoader.get_ant_sprite("worker")`
 
 ---
 
-## AFTER PHASE 1 — Phase 2: Priority System & Job Score
+## NEXT — Phase 2: Priority System & Job Score
 
-- [ ] Add 8 priority categories to `colony_state.gd`
-- [ ] Add priority level cycling (low/normal/high/emergency) with weight multipliers from JSON
-- [ ] Extend job score formula with danger, resource urgency, solo bonus terms
-- [ ] Create Priority Panel HUD component
+- [ ] Add priority level cycling (low/normal/high/emergency) to colony_state
+- [ ] Extend job_queue._score_job with danger, resource_urgency, solo_bonus terms
+- [ ] Create `scripts/ui/priority_panel.gd` + `scenes/ui/priority_panel.tscn`
 - [ ] Changing priority to `emergency` forces all ants to re-score on next tick
 - [ ] Create `data/colony/priority_weights.json`
+- [ ] Verify: set food priority to high → workers prefer GATHER over DIG
 
 ---
 
 ## BLOCKED
 
-Nothing is blocked right now.
+Nothing blocked.
 
 ---
 
-## NEEDS TESTING
+## NEEDS TESTING (Phase 1)
 
-- `AssetLoader` fallback: does it print warnings (not errors) for all missing assets?
-- `AssetLoader.reload_manifest()`: confirm it clears cache and re-reads the JSON
+- Worker FSM: does it get stuck if all jobs are claimed?
+- BFS: unreachable tile — does worker gracefully wander instead of looping?
+- Gather job re-add: is it duplicated if two workers finish gather at same time?
+  (job_queue.add_job has duplicate guard — should be safe)
+- AssetLoader fallback: workers should show amber placeholder if sprite file missing
 
 ---
 
@@ -92,4 +83,5 @@ Nothing is blocked right now.
 - Phase 0 setup files created (2026-05-07)
 - Phase 0.5 asset pipeline and placeholder generator complete (2026-05-07)
 - Design docs updated: CONTEXT.md, ROADMAP.md, AUTONOMY_DESIGN.md (2026-05-07)
-- Project organized and pushed to GitHub: https://github.com/SnazzyTrack9218/ant-colony-wars (2026-05-07)
+- Project pushed to GitHub: https://github.com/SnazzyTrack9218/ant-colony-wars (2026-05-07)
+- Phase 1 core scripts written: game_manager, colony_state, job_queue, worker_ant, main, hud (2026-05-07)

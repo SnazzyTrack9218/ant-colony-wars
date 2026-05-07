@@ -1,0 +1,6 @@
+{
+    "move_speed": 0.12,
+    "dig_duration": 1.2,
+    "food_per_gather": 1,
+    "wander_delay": 0.35
+}
