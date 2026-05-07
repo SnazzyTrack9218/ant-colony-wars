@@ -1,0 +1,22 @@
+# Godot 4 runtime cache (auto-generated, never commit)
+.godot/
+/android/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyd
+
+# Claude Code local config
+.claude/
+
+# Asset pipeline inbox
+# pipeline_config.json IS committed — raw image files are not
+assets_inbox/**/*.png
+assets_inbox/**/*.PNG
+assets_inbox/**/*.import
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

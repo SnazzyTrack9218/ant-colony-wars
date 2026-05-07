@@ -1,0 +1,78 @@
+{
+  "_comment": "Asset pipeline config for Ant Colony Wars. See docs/ROADMAP.md Phase 0.5.",
+
+  "_defaults": {
+    "_comment": "Applied to every file in every category unless overridden.",
+    "mode":         "single",
+    "background":   "auto",
+    "bg_tolerance": 30,
+    "trim":         true,
+    "output_size":  null
+  },
+
+  "ants": {
+    "_comment": "Examples — rename or delete when you add real files.",
+
+    "_category_defaults": {
+      "_comment": "Applied to all files in ants/ unless the file has its own entry.",
+      "bg_tolerance": 25
+    },
+
+    "ant_sheet.png": {
+      "_comment": "4-wide sprite sheet: worker, soldier, queen, egg in one row.",
+      "mode":       "grid",
+      "columns":    4,
+      "rows":       1,
+      "background": "#FF00FF",
+      "outputs":    ["worker_ant.png", "soldier_ant.png", "queen_ant.png", "egg.png"]
+    },
+
+    "worker_ant_raw.png": {
+      "_comment": "Single worker ant on a white background.",
+      "mode":       "single",
+      "background": "#FFFFFF",
+      "output":     "worker_ant.png"
+    }
+  },
+
+  "tiles": {
+    "_category_defaults": {
+      "_comment": "All tile sprites are forced to 16×16 to match the TileMap.",
+      "output_size": [16, 16]
+    },
+
+    "tile_sheet.png": {
+      "_comment": "3-column sheet: dirt, tunnel, stone.",
+      "mode":      "grid",
+      "columns":   3,
+      "rows":      1,
+      "outputs":   ["dirt_tile.png", "tunnel_tile.png", "stone_tile.png"]
+    }
+  },
+
+  "rooms": {
+    "_category_defaults": {
+      "output_size": [64, 64]
+    }
+  },
+
+  "enemies": {
+    "_category_defaults": {
+      "bg_tolerance": 20
+    },
+
+    "enemy_sheet.png": {
+      "_comment": "3-column sheet: spider, beetle, termite.",
+      "mode":      "grid",
+      "columns":   3,
+      "rows":      1,
+      "outputs":   ["spider_enemy.png", "beetle_enemy.png", "termite_enemy.png"]
+    }
+  },
+
+  "ui": {
+    "_category_defaults": {
+      "output_size": [32, 32]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "ants": {
+    "worker":  "res://assets/sprites/ants/worker_ant.png",
+    "soldier": "res://assets/sprites/ants/soldier_ant.png",
+    "queen":   "res://assets/sprites/ants/queen_ant.png",
+    "egg":     "res://assets/sprites/ants/egg.png"
+  },
+  "tiles": {
+    "dirt":    "res://assets/sprites/tiles/dirt_tile.png",
+    "tunnel":  "res://assets/sprites/tiles/tunnel_tile.png",
+    "stone":   "res://assets/sprites/tiles/stone_tile.png"
+  },
+  "rooms": {
+    "queen_chamber":    "res://assets/sprites/rooms/queen_chamber.png",
+    "nursery":          "res://assets/sprites/rooms/nursery.png",
+    "food_storage":     "res://assets/sprites/rooms/food_storage.png",
+    "soldier_barracks": "res://assets/sprites/rooms/soldier_barracks.png",
+    "mushroom_farm":    "res://assets/sprites/rooms/mushroom_farm.png",
+    "guard_post":       "res://assets/sprites/rooms/guard_post.png"
+  },
+  "enemies": {
+    "spider":  "res://assets/sprites/enemies/spider_enemy.png",
+    "beetle":  "res://assets/sprites/enemies/beetle_enemy.png",
+    "termite": "res://assets/sprites/enemies/termite_enemy.png"
+  },
+  "ui": {
+    "food_icon":    "res://assets/sprites/ui/food_icon.png",
+    "worker_icon":  "res://assets/sprites/ui/worker_icon.png",
+    "soldier_icon": "res://assets/sprites/ui/soldier_icon.png",
+    "egg_icon":     "res://assets/sprites/ui/egg_icon.png"
+  }
+}
