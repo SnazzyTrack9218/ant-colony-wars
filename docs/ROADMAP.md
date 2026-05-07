@@ -296,7 +296,100 @@ Phase 2 workers are reactive: they only work jobs placed by the player. Phase 3 
 
 ---
 
-## Phase 5 — Rooms & Colony Growth
+## Phase 5 — UI Visual Design Language
+
+**Goal:** Establish the dark, minimal, gradient aesthetic that all future UI inherits. Every pixel earns its place. Nothing visible that isn't needed in the next five seconds.
+
+### Design Principles
+- **Dark-first**: near-black backgrounds everywhere — no light grays, no white panels
+- **Gradient accents**: amber→orange for resources/workers; blue for markers/info; red for threats — never flat solid fills on accent elements
+- **Minimal**: at most 3–4 pieces of information visible at once; everything else collapsed or hidden until needed
+- **No clutter**: if a player hasn't asked for it, they don't see it
+
+### Color Palette (single source of truth in `ui_theme.gd`)
+
+| Token | Hex | Use |
+|---|---|---|
+| `BG_DARK` | `#0B0B0F` | Scene background, fullscreen overlay |
+| `PANEL_SURFACE` | `#12121C` | Panel, menu card background |
+| `PANEL_EDGE` | `#2A2A3F` | 1px top edge highlight (glass shelf) |
+| `TEXT_PRIMARY` | `#E8E8F0` | Labels, values |
+| `TEXT_MUTED` | `#5A5A72` | Secondary info, disabled state |
+| `ACCENT_AMBER` | `#FF9520` | Food icon, worker count, high priority |
+| `ACCENT_BLUE` | `#4A9FFF` | Dig marker outline, info elements |
+| `ACCENT_RED` | `#FF4040` | Queen HP, enemy presence, emergency |
+| `ACCENT_PURPLE` | `#A070FF` | Building/room markers |
+
+Panel gradient: linear top→bottom from `#14141E` to `#0B0B0F`.
+
+### HUD Layout (collapsed state)
+```
+[food_icon] 42 / 200          [⚙ 5 workers]
+                                              [priority dot-row]
+```
+- Top-left: food icon + `current / max` in `ACCENT_AMBER`, small text
+- Top-right: worker icon + count
+- Bottom-right corner: priority panel, collapsed to 8 color dots
+- Nothing else visible
+
+### Component Specs
+
+**Priority panel (collapsed):** 8 dots in a single row, 8px diameter. Dot color = current level:
+- `low` → `TEXT_MUTED` (grey)
+- `normal` → `TEXT_PRIMARY` (white)
+- `high` → `ACCENT_AMBER`
+- `emergency` → `ACCENT_RED`
+
+**Priority panel (expanded on hover):** slides up from bottom-right; each row shows icon + category name + level label + `−` / `+` buttons; max width 220px; `PANEL_SURFACE` background with `PANEL_EDGE` border; auto-collapses on mouse-leave.
+
+**Dig marker:** thin 1px `ACCENT_AMBER` outlined square, no fill, 70% alpha. Single pulse-fade animation (scale 1.0 → 1.15 → 1.0 over 250ms) on placement.
+
+**Buttons:** flat, no border radius; 1px `PANEL_EDGE` top edge; hover = `PANEL_SURFACE` fill at 20% brightness boost; active = 3px `ACCENT_AMBER` left strip.
+
+**Main menu card:** centered `PANEL_SURFACE` panel, gradient fill, 1px `PANEL_EDGE` border, game title in large `TEXT_PRIMARY`, three flat buttons stacked.
+
+### Features
+- `scripts/ui/ui_theme.gd` — color and StyleBox constants; no UI script defines a color anywhere else
+- Godot Theme resource built from `ui_theme.gd` constants and applied globally via `project.godot`
+- Redesigned HUD: food + worker count only; no extra labels
+- Priority panel: collapsed dot-row; smooth slide-up on hover; slide-down on leave
+- Dig marker visual: replace solid `ColorRect` with outlined square + placement pulse
+- Main menu: dark card layout using palette
+- Font size scale: 11px muted info / 13px primary labels / 16px headers — no other sizes
+
+### Files Likely Changed
+- `scripts/ui/ui_theme.gd` — new; color constants + StyleBox factory
+- `scenes/ui/hud.tscn` + `scripts/ui/hud.gd` — minimal layout
+- `scenes/ui/priority_panel.tscn` + `scripts/ui/priority_panel.gd` — dot-row collapse + expand animation
+- `scenes/ui/main_menu.tscn` + `scripts/ui/main_menu.gd` — dark card style
+- `scripts/main.gd` — dig marker visual: outlined rect with pulse tween
+
+### Test Checklist
+- [ ] HUD shows only food count + worker count; no other panels visible by default
+- [ ] Priority panel collapses to dot row; dots match current priority levels by color
+- [ ] Priority panel expands smoothly on hover; collapses on mouse-leave; no jump/flicker
+- [ ] Dig marker is a thin outline square; pulses once on placement; no solid fill
+- [ ] Main menu uses `BG_DARK` background, `PANEL_SURFACE` card, flat buttons
+- [ ] No white or light-gray backgrounds anywhere in the UI
+- [ ] All colors come from `ui_theme.gd`; zero per-node color overrides in `.tscn` files
+- [ ] Consistent font sizes: 11 / 13 / 16 only
+
+### Acceptance Criteria
+- Dark minimal aesthetic consistent across all current UI (HUD, priority panel, main menu)
+- `ui_theme.gd` is the single source of truth for every UI color and StyleBox
+- HUD has at most 2–3 visible info elements when collapsed
+- Priority panel collapsed by default
+
+### What NOT to Do in This Phase
+- Do not add UI for features that don't exist yet (rooms, soldiers, enemies)
+- Do not use Godot's default gray/blue theme anywhere
+- Do not add animations that block gameplay or take more than 250ms
+- Do not add tooltips or help text yet
+- Never define a color directly inside a `.tscn` file or `set_modulate` call — source from `ui_theme.gd`
+
+---
+
+## Phase 6 — Rooms & Colony Growth
 
 **Goal:** The colony expands structurally. Workers build rooms that produce colony outputs automatically.
 
@@ -342,18 +435,18 @@ The player never places a finished room. They place a Room Plan Marker in cleare
 - `room_manager.gd` tracks all room states correctly
 
 ### What NOT to Do in This Phase
-- No soldier ants yet — Barracks can be placed but trains nothing until Phase 6
+- No soldier ants yet — Barracks can be placed but trains nothing until Phase 7
 - No enemies
 - Do not hardcode room stats — all values from config JSON
 
 ---
 
-## Phase 6 — Combat & Enemies
+## Phase 7 — Combat & Enemies
 
 **Goal:** The colony faces threats. Soldiers defend autonomously; the player directs them with markers and priorities.
 
 ### Design Summary
-Soldiers are trained by the Barracks (Phase 5). They patrol near the queen by default. Enemies spawn from world edges. Soldiers auto-engage based on `defense` priority. The player can redirect soldiers with Rally Markers and push them into enemy territory.
+Soldiers are trained by the Barracks (Phase 6). They patrol near the queen by default. Enemies spawn from world edges. Soldiers auto-engage based on `defense` priority. The player can redirect soldiers with Rally Markers and push them into enemy territory.
 
 ### Features
 - Soldier ant type with FSM: `IDLE_PATROL → ENGAGE → RETURN`
@@ -398,7 +491,7 @@ Soldiers are trained by the Barracks (Phase 5). They patrol near the queen by de
 
 ---
 
-## Phase 7 — Full Marker Set & Upgrades
+## Phase 8 — Full Marker Set & Upgrades
 
 **Goal:** Complete the marker vocabulary. Add efficiency upgrades.
 
@@ -451,7 +544,7 @@ All levels and costs in `data/upgrades/upgrades_config.json`.
 
 ---
 
-## Phase 8 — Advanced Colony AI & Seeded World Scale
+## Phase 9 — Advanced Colony AI & Seeded World Scale
 
 **Goal:** Make the colony feel self-organizing at large scale. Establish deterministic seeded generation required for multiplayer.
 
@@ -490,14 +583,14 @@ All levels and costs in `data/upgrades/upgrades_config.json`.
 
 ---
 
-## Phase 9 — Local Multiplayer Prototype
+## Phase 10 — Local Multiplayer Prototype
 
 **Goal:** Two colonies on one screen. Validate PvP mechanics before networking.
 
 ### Features
 - Split-screen: Player 1 controls left colony, Player 2 controls right colony
 - Shared TileMap — both colonies dig in the same world
-- Shared seeded map from Phase 8 generator
+- Shared seeded map from Phase 9 generator
 - Seed selection UI for local matches
 - Victory condition: destroy enemy queen
 - No networking — both players on same keyboard or controllers
@@ -523,11 +616,11 @@ All levels and costs in `data/upgrades/upgrades_config.json`.
 ### What NOT to Do in This Phase
 - No network code
 - No Steam
-- Do not add new game mechanics not present in Phases 1–7
+- Do not add new game mechanics not present in Phases 1–8
 
 ---
 
-## Phase 10 — Online Multiplayer
+## Phase 11 — Online Multiplayer
 
 **Goal:** Two players over network. Server is authoritative.
 
@@ -567,13 +660,13 @@ All levels and costs in `data/upgrades/upgrades_config.json`.
 - Disconnect handled
 
 ### What NOT to Do in This Phase
-- No Steam lobbies yet (Phase 11)
+- No Steam lobbies yet (Phase 12)
 - Do not trust any client data for game-state decisions
 - Do not add new gameplay features
 
 ---
 
-## Phase 11 — Polish & Steam
+## Phase 12 — Polish & Steam
 
 **Goal:** Ship-ready. Steam integration, full audio, real art, stable performance.
 

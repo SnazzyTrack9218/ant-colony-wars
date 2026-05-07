@@ -38,7 +38,20 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
 ---
 
-## NEXT — Phase 5: Rooms & Colony Growth
+## NEXT — Phase 5: UI Visual Design Language
+
+- [ ] `scripts/ui/ui_theme.gd` — color constants + StyleBox factory; single source of truth for all UI colors
+- [ ] Apply theme globally via `project.godot` Theme setting
+- [ ] HUD: food icon + count only (top-left), worker count (top-right) — nothing else visible by default
+- [ ] Priority panel: 8 color dots collapsed; slide-up expand on hover; slide-down on mouse-leave
+- [ ] Dig marker: replace solid `ColorRect` with thin 1px outlined square + 250ms pulse tween on placement
+- [ ] Main menu: `BG_DARK` background, `PANEL_SURFACE` card, flat buttons styled from `ui_theme.gd`
+- [ ] Enforce font sizes: 11px muted / 13px primary / 16px headers — no other sizes
+- [ ] Audit all `.tscn` files: zero per-node color overrides allowed
+
+---
+
+## NEXT — Phase 6: Rooms & Colony Growth
 
 - [ ] Room Plan Marker: player opens menu, selects type, places blueprint in empty tunnel
 - [ ] BUILD job type added to job_queue
@@ -51,7 +64,7 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
 ---
 
-## NEXT — Phase 6: Combat & Enemies
+## NEXT — Phase 7: Combat & Enemies
 
 - [ ] Spider enemy: spawns from world edges on timer, walks toward queen
 - [ ] Beetle enemy: slower, higher HP
