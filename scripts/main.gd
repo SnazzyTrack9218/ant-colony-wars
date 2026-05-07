@@ -206,7 +206,9 @@ func _on_job_completed(job: JobQueue.Job) -> void:
 # ── Camera ────────────────────────────────────────────────────────────────────
 
 func _center_camera() -> void:
-	var queen_center := Vector2(
-			_queen_col * TILE_SIZE + TILE_SIZE / 2.0,
-			_queen_row * TILE_SIZE + TILE_SIZE / 2.0)
-	_camera.position = queen_center
+	# zoom=1 so the entire world (960×640 px) fits inside the 1280×720 viewport —
+	# ants can never walk off-screen regardless of where they go.
+	_camera.zoom = Vector2(1.0, 1.0)
+	_camera.position = Vector2(
+			_world_w * TILE_SIZE / 2.0,
+			_world_h * TILE_SIZE / 2.0)

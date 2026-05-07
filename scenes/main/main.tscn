@@ -18,6 +18,6 @@ z_index = 1
 z_index = 1
 
 [node name="Camera2D" type="Camera2D" parent="."]
-zoom = Vector2(2, 2)
+zoom = Vector2(1, 1)
 
 [node name="HUD" parent="." instance=ExtResource("2_hud")]
