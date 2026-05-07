@@ -2,6 +2,9 @@ extends Node2D
 
 const TILE_SIZE: int = 16
 const WorkerAntScene: PackedScene = preload("res://scenes/ants/worker_ant.tscn")
+const SoldierAntScene: PackedScene = preload("res://scenes/ants/soldier_ant.tscn")
+const GameOverScene: PackedScene = preload("res://scenes/ui/game_over_screen.tscn")
+const EnemySpawnerScript: GDScript = preload("res://scripts/core/enemy_spawner.gd")
 const WorldGeneratorScript: GDScript = preload("res://scripts/core/world_generator.gd")
 const ROOM_TYPE_ORDER: Array[String] = [
 	"nursery",
@@ -42,25 +45,68 @@ var _food_positions: Array = []
 
 @onready var _tile_map: TileMapLayer = $TileMapLayer
 @onready var _ants_root: Node2D = $Ants
+@onready var _enemies_root: Node2D = $Enemies
 @onready var _dig_markers_root: Node2D = $DigMarkers
 @onready var _food_markers_root: Node2D = $FoodMarkers
 @onready var _room_plans_root: Node2D = $RoomPlans
 @onready var _rooms_root: Node2D = $Rooms
+@onready var _rally_markers_root: Node2D = $RallyMarkers
 @onready var _camera: Camera2D = $Camera2D
+
+var _enemy_spawner: Node = null
+var _game_over_layer: CanvasLayer = null
+var _rally_marker_nodes: Dictionary = {}  # job_id -> Panel
 
 
 func _ready() -> void:
 	_load_config()
 	_load_camera_config()
 	_setup_tileset()
+	_ensure_runtime_nodes()
 	_build_world()
 	_place_food_sources()
 	_spawn_starting_workers()
 	_center_camera()
+	_setup_enemy_spawner()
+	_setup_game_over_screen()
 	AudioManager.play_music_mode("peace")
 	_connect_room_manager()
 	GameManager.job_queue.job_completed.connect(_on_job_completed)
 	print("Main: world ready. %d×%d tiles." % [_world_w, _world_h])
+
+
+func _ensure_runtime_nodes() -> void:
+	# Enemies and RallyMarkers may not exist in the .tscn yet — create lazily.
+	if _enemies_root == null:
+		_enemies_root = Node2D.new()
+		_enemies_root.name = "Enemies"
+		add_child(_enemies_root)
+	if _rally_markers_root == null:
+		_rally_markers_root = Node2D.new()
+		_rally_markers_root.name = "RallyMarkers"
+		add_child(_rally_markers_root)
+
+
+func _setup_enemy_spawner() -> void:
+	_enemy_spawner = EnemySpawnerScript.new()
+	add_child(_enemy_spawner)
+	_enemy_spawner.configure(
+			_tile_map,
+			_enemies_root,
+			_world_w,
+			_world_h,
+			_surface_row,
+			Vector2i(_queen_col, _queen_row),
+			_sid["tunnel"],
+			_sid["queen"],
+			_sid["dirt"],
+			_sid["stone"])
+	_enemy_spawner.start()
+
+
+func _setup_game_over_screen() -> void:
+	_game_over_layer = GameOverScene.instantiate()
+	add_child(_game_over_layer)
 
 
 func _process(delta: float) -> void:
@@ -218,6 +264,26 @@ func _spawn_worker(tile_pos: Vector2i) -> void:
 	AudioManager.play_ant_spawned()
 
 
+func _spawn_soldier(tile_pos: Vector2i) -> void:
+	var soldier: Node2D = SoldierAntScene.instantiate()
+	_ants_root.add_child(soldier)
+	soldier.setup(
+			_tile_map,
+			_sid["tunnel"],
+			_sid["queen"],
+			tile_pos,
+			_world_w,
+			_world_h,
+			_surface_row)
+	AudioManager.play_ant_spawned()
+
+
+func _on_soldier_spawn_requested(tile_pos: Vector2i) -> void:
+	var spawn_tile: Vector2i = _find_spawn_tile_near(tile_pos)
+	if spawn_tile != Vector2i(-1, -1):
+		_spawn_soldier(spawn_tile)
+
+
 # ── Input ─────────────────────────────────────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -234,6 +300,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			var room_tile_pos: Vector2i = _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
 			_try_place_room_plan(room_tile_pos)
+			return
+		if event.button_index == MOUSE_BUTTON_MIDDLE:
+			var rally_tile_pos: Vector2i = _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
+			_try_place_rally_marker(rally_tile_pos)
 			return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var tile_pos := _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
@@ -278,6 +348,46 @@ func _try_place_room_plan(target: Vector2i) -> void:
 		AudioManager.play_marker_placed()
 
 
+func _try_place_rally_marker(target: Vector2i) -> void:
+	if target.x < 0 or target.x >= _world_w or target.y < 0 or target.y >= _world_h:
+		return
+	# Rally only on tunnel tiles (no dirt, stone, queen-chamber).
+	if _tile_map.get_cell_source_id(target) != _sid["tunnel"]:
+		return
+	# Avoid duplicates at the same spot.
+	if GameManager.job_queue.has_job(JobQueue.TYPE_RALLY, target):
+		return
+	var job = GameManager.job_queue.add_job(JobQueue.TYPE_RALLY, target)
+	if job == null:
+		return
+	_add_rally_marker_visual(job.id, target)
+	AudioManager.play_marker_placed()
+
+
+func _add_rally_marker_visual(job_id: int, tile_pos: Vector2i) -> void:
+	var marker := Panel.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(ColonyUITheme.ACCENT_RED.r, ColonyUITheme.ACCENT_RED.g, ColonyUITheme.ACCENT_RED.b, 0.10)
+	style.border_color = ColonyUITheme.ACCENT_RED
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(0)
+	marker.add_theme_stylebox_override("panel", style)
+	marker.size = Vector2(TILE_SIZE, TILE_SIZE)
+	marker.pivot_offset = marker.size * 0.5
+	marker.position = Vector2(tile_pos.x * TILE_SIZE, tile_pos.y * TILE_SIZE)
+	_rally_markers_root.add_child(marker)
+	_rally_marker_nodes[job_id] = marker
+	var tween: Tween = create_tween()
+	tween.tween_property(marker, "scale", Vector2(1.20, 1.20), 0.10)
+	tween.tween_property(marker, "scale", Vector2.ONE, 0.14)
+
+
+func _remove_rally_marker_visual(job_id: int) -> void:
+	if job_id in _rally_marker_nodes:
+		_rally_marker_nodes[job_id].queue_free()
+		_rally_marker_nodes.erase(job_id)
+
+
 func _add_dig_marker(tile_pos: Vector2i) -> void:
 	var marker := Panel.new()
 	marker.add_theme_stylebox_override("panel", _make_dig_marker_style())
@@ -304,6 +414,8 @@ func _make_dig_marker_style() -> StyleBoxFlat:
 func _on_job_completed(job: JobQueue.Job) -> void:
 	if job.type == JobQueue.TYPE_DIG:
 		_remove_dig_marker(job.tile_pos)
+	elif job.type == JobQueue.TYPE_RALLY:
+		_remove_rally_marker_visual(job.id)
 
 
 func _connect_room_manager() -> void:
@@ -311,6 +423,7 @@ func _connect_room_manager() -> void:
 	GameManager.room_manager.room_plan_updated.connect(_on_room_plan_updated)
 	GameManager.room_manager.room_completed.connect(_on_room_completed)
 	GameManager.room_manager.worker_spawn_requested.connect(_on_worker_spawn_requested)
+	GameManager.room_manager.soldier_spawn_requested.connect(_on_soldier_spawn_requested)
 
 
 func _on_room_plan_created(plan_id: int, room_type: String, tile_pos: Vector2i, _build_cost: int) -> void:

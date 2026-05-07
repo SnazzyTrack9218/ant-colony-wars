@@ -7,11 +7,13 @@ signal job_completed(job)
 const TYPE_DIG := 0
 const TYPE_GATHER := 1
 const TYPE_BUILD := 2
+const TYPE_RALLY := 3
 
 const CATEGORY_BY_TYPE: Dictionary = {
 	TYPE_DIG: "digging",
 	TYPE_GATHER: "food",
 	TYPE_BUILD: "building",
+	TYPE_RALLY: "defense",
 }
 
 var _priority_weight_scale: float = 100.0

@@ -1,0 +1,10 @@
+{
+    "display_name": "Beetle",
+    "max_hp": 36,
+    "damage": 9,
+    "attack_cooldown": 1.4,
+    "move_time": 0.30,
+    "spawn_weight": 2,
+    "queen_target_priority": 0.8,
+    "color": [0.55, 0.18, 0.55, 1.0]
+}

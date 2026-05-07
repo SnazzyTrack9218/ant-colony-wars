@@ -5,6 +5,7 @@ signal room_plan_created(plan_id: int, room_type: String, tile_pos: Vector2i, bu
 signal room_plan_updated(plan_id: int, progress: int, build_cost: int)
 signal room_completed(plan_id: int, room_type: String, tile_pos: Vector2i)
 signal worker_spawn_requested(tile_pos: Vector2i)
+signal soldier_spawn_requested(tile_pos: Vector2i)
 
 const CONFIG_DIR: String = "res://data/rooms"
 const CONFIG_SUFFIX: String = "_config.json"
@@ -115,10 +116,14 @@ func _apply_completion_effect(room_type: String) -> void:
 
 func _tick_room_effect(room: Dictionary, delta: float) -> void:
 	var room_type: String = String(room.get("type", ""))
-	if room_type != "nursery" and room_type != "mushroom_farm":
+	if room_type != "nursery" and room_type != "mushroom_farm" and room_type != "soldier_barracks":
 		return
 	var config: Dictionary = _configs.get(room_type, {})
-	var interval_key: String = "hatch_interval" if room_type == "nursery" else "food_interval"
+	var interval_key: String = "hatch_interval"
+	if room_type == "mushroom_farm":
+		interval_key = "food_interval"
+	elif room_type == "soldier_barracks":
+		interval_key = "training_interval"
 	var interval: float = maxf(0.1, float(config.get(interval_key, 10.0)))
 	room["timer"] = float(room.get("timer", 0.0)) + delta
 	if float(room["timer"]) < interval:
@@ -130,6 +135,8 @@ func _tick_room_effect(room: Dictionary, delta: float) -> void:
 		_try_hatch_worker(room, config)
 	elif room_type == "mushroom_farm":
 		GameManager.add_food(maxi(0, int(config.get("food_amount", 1))))
+	elif room_type == "soldier_barracks":
+		_try_train_soldier(room, config)
 
 
 func _try_hatch_worker(room: Dictionary, config: Dictionary) -> void:
@@ -137,6 +144,17 @@ func _try_hatch_worker(room: Dictionary, config: Dictionary) -> void:
 	if food_cost > 0 and not GameManager.spend_food(food_cost):
 		return
 	worker_spawn_requested.emit(Vector2i(room["tile_pos"]))
+
+
+func _try_train_soldier(room: Dictionary, config: Dictionary) -> void:
+	# Only train when soldiers priority is at least normal.
+	var soldiers_priority: String = String(GameManager.colony.priorities.get("soldiers", "normal"))
+	if soldiers_priority == "low":
+		return
+	var food_cost: int = maxi(0, int(config.get("training_food_cost", 0)))
+	if food_cost > 0 and not GameManager.spend_food(food_cost):
+		return
+	soldier_spawn_requested.emit(Vector2i(room["tile_pos"]))
 
 
 func _load_configs() -> void:

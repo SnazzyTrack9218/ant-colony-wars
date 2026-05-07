@@ -432,48 +432,53 @@ The player never places a finished room. They place a Room Plan Marker in cleare
 
 ---
 
-## Phase 7 — Combat & Enemies
+## Phase 7 — Combat & Enemies ✓
 
 **Goal:** The colony faces threats. Soldiers defend autonomously; the player directs them with markers and priorities.
 
 ### Design Summary
-Soldiers are trained by the Barracks (Phase 6). They patrol near the queen by default. Enemies spawn from world edges. Soldiers auto-engage based on `defense` priority. The player can redirect soldiers with Rally Markers and push them into enemy territory.
+Soldiers are trained by the Barracks (Phase 6). They patrol near the queen by default. Enemies spawn from world edges. Soldiers auto-engage based on `defense` priority. The player can redirect soldiers with Rally Markers (middle-click on a tunnel tile).
 
 ### Features
-- [ ] Soldier ant type with FSM: `IDLE_PATROL → ENGAGE → RETURN`
-- [ ] Soldiers auto-engage enemies within detection radius; radius scales with `defense` priority
-- [ ] **Rally Marker** (right-click): soldiers path to it and hold position
-- [ ] **Raid Rally Marker** (right-click enemy territory): soldiers push toward enemy queen
-- [ ] Spider enemy: spawns from world edges on timer; walks toward queen
-- [ ] Beetle enemy: slower, higher HP
-- [ ] HP bars above all ants and enemies
-- [ ] `enemy_spawner.gd` + `data/enemies/*_config.json`
-- [ ] Queen death → game over screen
+- [x] Soldier ant type with FSM: `IDLE_PATROL → ENGAGE → RETURN → MOVE_TO_RALLY → AT_RALLY`
+- [x] Soldiers auto-engage enemies within detection radius; radius scales with `defense` priority (low: adjacent only; normal: 1×; high: 1.5×; emergency: 3×)
+- [x] **Rally Marker** (middle-click on tunnel): soldiers path to it and hold position
+- [ ] **Raid Rally Marker** (right-click enemy territory): pushed to Phase 10 (multiplayer) — single-player has no enemy queen yet
+- [x] Spider enemy: spawns from world edges on timer; walks toward queen via greedy step
+- [x] Beetle enemy: slower, higher HP
+- [x] HP bars above all soldiers and enemies (ColorRect-based, scales with current HP)
+- [x] `enemy_spawner.gd` + `data/enemies/*_config.json` + `data/colony/enemy_spawn_config.json`
+- [x] Queen death → game over screen with Restart / Main Menu options
+- [x] Soldier Barracks trains one soldier per `training_interval` when soldiers priority is non-low
 
-### Files Likely Changed
-- [ ] `scripts/ants/soldier_ant.gd`
-- [ ] `scenes/ants/soldier_ant.tscn`
-- [ ] `scripts/enemies/spider.gd`, `beetle.gd`
-- [ ] `scenes/enemies/spider.tscn`, `beetle.tscn`
-- [ ] `scripts/core/enemy_spawner.gd`
-- [ ] `scripts/core/job_queue.gd` — add RALLY, RAID, PATROL job types
-- [ ] `data/enemies/spider_config.json`, `beetle_config.json`
+### Files Changed
+- [x] `scripts/ants/soldier_ant.gd` + `scenes/ants/soldier_ant.tscn`
+- [x] `scripts/enemies/enemy_base.gd`, `spider.gd`, `beetle.gd`
+- [x] `scenes/enemies/spider.tscn`, `beetle.tscn`
+- [x] `scripts/core/enemy_spawner.gd`
+- [x] `scripts/core/job_queue.gd` — add TYPE_RALLY (defense category)
+- [x] `scripts/core/room_manager.gd` — Barracks training tick + soldier_spawn_requested signal
+- [x] `scripts/main.gd` — soldier spawning, enemy spawner setup, rally markers, game-over wiring
+- [x] `scripts/ui/game_over_screen.gd` + `scenes/ui/game_over_screen.tscn`
+- [x] `data/enemies/spider_config.json`, `beetle_config.json`
+- [x] `data/colony/enemy_spawn_config.json`
+- [x] `data/ants/soldier_config.json`
 
 ### Test Checklist
 - [ ] Enemies spawn from world edges on timer
 - [ ] Enemies walk toward queen; queen takes damage on contact
-- [ ] Soldier on `normal` defense patrols near queen; engages enemy within radius
-- [ ] Right-click in tunnel → Rally Marker placed; soldiers pathfind to it
+- [ ] Soldier on `normal` defense patrols near barracks; engages enemy within radius
+- [ ] Middle-click in tunnel → Rally Marker placed; soldiers pathfind to it
 - [ ] Set defense to `emergency` → all soldiers rush nearest enemy immediately
 - [ ] HP bars visible and decrease correctly
-- [ ] Queen dies → game over screen
+- [ ] Queen dies → game over screen with Restart / Main Menu
 - [ ] No framerate drops with 15 soldiers + 10 enemies
 
 ### Acceptance Criteria
-- [ ] Soldiers defend without explicit orders when `defense` priority is non-low
-- [ ] Player can redirect soldiers with Rally Markers
-- [ ] Two enemy types functional
-- [ ] Game over triggers on queen death
+- [x] Soldiers defend without explicit orders when `defense` priority is non-low
+- [x] Player can redirect soldiers with Rally Markers
+- [x] Two enemy types functional
+- [x] Game over triggers on queen death
 
 ### What NOT to Do in This Phase
 - Do not add A* for enemies — straight-line approach only

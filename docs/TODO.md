@@ -5,7 +5,7 @@ Always read this file before starting any work session.
 
 ---
 
-## NOW â€” Phase 6: Rooms & Colony Growth
+## NOW — Phase 7: Combat & Enemies
 
 Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
@@ -77,16 +77,31 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
 ---
 
-## NEXT â€” Phase 7: Combat & Enemies
+## CURRENT — Phase 7: Combat & Enemies
 
-- [ ] Spider enemy: spawns from world edges on timer, walks toward queen
-- [ ] Beetle enemy: slower, higher HP
-- [ ] Soldier ant FSM: IDLE_PATROL â†’ ENGAGE â†’ RETURN
-- [ ] Soldier auto-engages enemies within detection radius based on `defense` priority
-- [ ] Rally Marker (right-click): soldiers path to it and hold position
-- [ ] HP bars on ants and enemies
-- [ ] Queen death â†’ game over screen
-- [ ] `scripts/core/enemy_spawner.gd` + `data/enemies/*_config.json`
+- [x] Spider enemy: spawns from world edges on timer, walks toward queen
+- [x] Beetle enemy: slower, higher HP
+- [x] Soldier ant FSM: IDLE_PATROL → ENGAGE → RETURN → MOVE_TO_RALLY → AT_RALLY
+- [x] Soldier auto-engages enemies within detection radius based on `defense` priority
+- [x] Rally Marker (middle-click on tunnel): soldiers path to it and hold position
+- [x] HP bars on soldiers and enemies
+- [x] Queen death → game over screen with Restart / Main Menu
+- [x] `scripts/core/enemy_spawner.gd` + `data/enemies/*_config.json`
+- [x] `data/ants/soldier_config.json` + `data/colony/enemy_spawn_config.json`
+- [x] Soldier Barracks trains one soldier per `training_interval` when soldiers priority is non-low
+- [ ] Worker flee behavior on enemy proximity (deferred)
+- [ ] Raid Rally Marker (deferred to multiplayer phase — no enemy queen yet)
+
+---
+
+## NEXT — Phase 8: Full Marker Set & Upgrades
+
+- [ ] Repair Marker — left-click damaged room/wall; worker repairs and removes marker
+- [ ] Emergency Marker — shift+right-click; all idle ants re-score toward location
+- [ ] Patrol Zone — drag on tunnel area; soldiers loop between endpoints
+- [ ] Fortify — left-click tunnel entrance; soldier stands guard
+- [ ] Upgrade panel in HUD; 5 upgrade types purchased with food
+- [ ] All upgrade levels and costs in `data/upgrades/upgrades_config.json`
 
 ---
 
@@ -155,3 +170,4 @@ Nothing blocked.
 - Phase 4 completed: SFX event hooks, looping music stub, compact priority panel, and pulsing dig marker feedback (2026-05-07)
 - Phase 5 completed: shared UI theme script applied to menus, HUD, priority panel, and dig markers (2026-05-07)
 - Phase 6 completed: room configs, room manager, BUILD jobs, worker building, room visuals, storage/nursery/farm effects (2026-05-07)
+- Phase 7 completed: soldier ant FSM with engage/return/rally, spider/beetle enemies, enemy spawner, HP bars, Soldier Barracks training, middle-click rally markers, queen-death game over screen (2026-05-07)

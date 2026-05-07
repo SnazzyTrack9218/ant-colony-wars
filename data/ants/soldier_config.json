@@ -1,0 +1,11 @@
+{
+    "display_name": "Soldier",
+    "max_hp": 28,
+    "damage": 7,
+    "attack_cooldown": 0.7,
+    "move_time": 0.10,
+    "detection_radius": 8,
+    "patrol_radius": 6,
+    "training_food_cost": 12,
+    "training_duration": 5.0
+}

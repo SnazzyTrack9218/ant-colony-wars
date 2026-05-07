@@ -213,7 +213,7 @@ res://
 
 ## Current Development Phase
 
-**Phase 3 â€” Ant Autonomy & World Quality** (in progress)
+**Phase 7 — Combat & Enemies** (just landed; Phases 1–6 complete)
 
 ---
 
