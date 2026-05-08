@@ -7,8 +7,8 @@
     "wander_delay": 0.35,
     "sprite_max_size": 12.0,
     "auto_gather_enabled": true,
-    "auto_explore_enabled": true,
-    "auto_explore_candidate_limit": 24,
+    "auto_explore_enabled": false,
+    "auto_explore_candidate_limit": 8,
     "auto_food_route_enabled": true,
     "auto_food_route_food_ratio": 0.35
 }

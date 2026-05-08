@@ -5,9 +5,11 @@ extends CanvasLayer
 
 const CONTROLS: Array = [
 	{"keys": "Left-click dirt", "action": "Place a Dig Marker — workers will dig there."},
+	{"keys": "Left-click dig marker", "action": "Cancel that dig order."},
 	{"keys": "Right-click tunnel", "action": "Place a Room Plan blueprint of the selected room."},
 	{"keys": "Middle-click tunnel", "action": "Place a Rally Marker — soldiers go and hold position."},
-	{"keys": "Shift + Left-click", "action": "Repair Marker (on a damaged room) — workers haul food to repair."},
+	{"keys": "Middle-click rally marker", "action": "Cancel that rally order; soldiers return to patrol."},
+	{"keys": "Shift + Left-click", "action": "Repair Marker on a damaged room — workers haul food to repair."},
 	{"keys": "Shift + Right-click", "action": "Emergency Marker on dirt — every idle worker drops everything to dig there."},
 	{"keys": "1 – 5", "action": "Pick which room type the next right-click will place."},
 	{"keys": "B", "action": "Cycle through room types."},
@@ -15,6 +17,7 @@ const CONTROLS: Array = [
 	{"keys": "Esc", "action": "Open the pause menu (or close this help screen)."},
 	{"keys": "WASD / Arrow keys", "action": "Pan the camera around the map."},
 	{"keys": "Mouse wheel", "action": "Zoom in / out."},
+	{"keys": "Autopilot", "action": "The colony auto-places rooms and auto-buys upgrades on its own. You can override anytime."},
 ]
 
 @onready var _bg: ColorRect = $Background

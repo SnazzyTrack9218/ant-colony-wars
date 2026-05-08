@@ -381,13 +381,17 @@ func _handle_room_selection_key(keycode: int) -> void:
 func _try_place_dig_target(target: Vector2i) -> void:
 	if target.x < 0 or target.x >= _world_w or target.y < 0 or target.y >= _world_h:
 		return
+	# Click on an existing dig marker → cancel it.
+	if target in _dig_marker_nodes:
+		GameManager.job_queue.cancel_job_at(JobQueue.TYPE_DIG, target)
+		_remove_dig_marker(target)
+		AudioManager.play_marker_placed()
+		return
 	if _tile_map.get_cell_source_id(target) != _sid["dirt"]:
 		return
 	if target in _protected:
 		return
 	if target in _food_positions:
-		return
-	if target in _dig_marker_nodes:
 		return
 	_add_dig_marker(target)
 	AudioManager.play_marker_placed()
@@ -409,17 +413,37 @@ func _try_place_room_plan(target: Vector2i) -> void:
 func _try_place_rally_marker(target: Vector2i) -> void:
 	if target.x < 0 or target.x >= _world_w or target.y < 0 or target.y >= _world_h:
 		return
+	# Middle-click on an existing rally marker → cancel it.
+	if GameManager.job_queue.has_job(JobQueue.TYPE_RALLY, target):
+		_cancel_rally_marker_at(target)
+		AudioManager.play_marker_placed()
+		return
 	# Rally only on tunnel tiles (no dirt, stone, queen-chamber).
 	if _tile_map.get_cell_source_id(target) != _sid["tunnel"]:
-		return
-	# Avoid duplicates at the same spot.
-	if GameManager.job_queue.has_job(JobQueue.TYPE_RALLY, target):
 		return
 	var job = GameManager.job_queue.add_job(JobQueue.TYPE_RALLY, target)
 	if job == null:
 		return
 	_add_rally_marker_visual(job.id, target)
 	AudioManager.play_marker_placed()
+
+
+func _cancel_rally_marker_at(target: Vector2i) -> void:
+	# Find the matching job, release any soldier holding it, then remove the visual.
+	var job_id_to_remove: int = -1
+	for job in GameManager.job_queue._jobs:
+		if job.type == JobQueue.TYPE_RALLY and job.tile_pos == target:
+			job_id_to_remove = job.id
+			break
+	if job_id_to_remove == -1:
+		return
+	# Release any soldier currently holding the rally so they go back to patrol.
+	for soldier in get_tree().get_nodes_in_group("soldiers"):
+		if "_current_rally_job" in soldier and soldier._current_rally_job != null \
+				and soldier._current_rally_job.id == job_id_to_remove:
+			soldier._current_rally_job = null
+	GameManager.job_queue.cancel_job_at(JobQueue.TYPE_RALLY, target)
+	_remove_rally_marker_visual(job_id_to_remove)
 
 
 func _add_rally_marker_visual(job_id: int, tile_pos: Vector2i) -> void:

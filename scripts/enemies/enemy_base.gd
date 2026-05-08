@@ -161,80 +161,73 @@ func _attack_room_if_ready(room_tile: Vector2i) -> void:
 
 
 func _take_step_toward_queen() -> void:
-	# 1) Walk through any adjacent traversable tile (tunnel/queen/sky) toward queen.
-	var walk_step: Vector2i = _greedy_step_toward(_queen_tile, true)
-	if walk_step != Vector2i.ZERO:
-		var next_tile: Vector2i = _tile_pos + walk_step
-		_is_moving = true
-		_tile_pos = next_tile
-		_move_tween = create_tween()
-		_move_tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
-		_move_tween.tween_callback(_on_step_done)
-		return
-	# 2) No walkable step → try to dig through adjacent dirt toward queen.
-	var dig_target: Vector2i = _pick_dig_target()
-	if dig_target != Vector2i(-1, -1):
-		_start_digging(dig_target)
-		return
-	# 3) Surrounded by stone or world edge — wait briefly.
+	# Order of preference, queen-direction first:
+	#   1. Walk queen-direction if traversable.
+	#   2. Dig queen-direction if it's dirt.
+	#   3. Walk sideways toward queen (perpendicular axis).
+	#   4. Dig sideways through dirt.
+	#   5. Walk any remaining direction (don't get stuck).
+	# This prevents enemies from wandering sky/tunnels horizontally while
+	# the queen is one dirt tile away below them.
+	var primary: Array = _queen_direction_steps()
+
+	# 1 & 2: prioritized queen-direction steps — walk first, then dig.
+	for step in primary:
+		var n: Vector2i = _tile_pos + step
+		if _is_traversable(n):
+			_move_into(n)
+			return
+		if _is_dirt(n):
+			_start_digging(n)
+			return
+
+	# 3: sideways walk (any direction not in primary).
+	for step in DIRS:
+		if step in primary:
+			continue
+		var n: Vector2i = _tile_pos + step
+		if _is_traversable(n):
+			_move_into(n)
+			return
+
+	# 4: sideways dig.
+	for step in DIRS:
+		if step in primary:
+			continue
+		var n: Vector2i = _tile_pos + step
+		if _is_dirt(n):
+			_start_digging(n)
+			return
+
+	# 5: surrounded by stone / world edge — wait briefly and re-think.
 	_think_cooldown = 0.6
 
 
-func _greedy_step_toward(target: Vector2i, only_traversable: bool) -> Vector2i:
-	# Try axis with largest delta first; fall back to others.
-	var dx: int = sign(target.x - _tile_pos.x)
-	var dy: int = sign(target.y - _tile_pos.y)
-	var candidates: Array = []
-	if abs(target.x - _tile_pos.x) >= abs(target.y - _tile_pos.y):
-		if dx != 0:
-			candidates.append(Vector2i(dx, 0))
-		if dy != 0:
-			candidates.append(Vector2i(0, dy))
-	else:
-		if dy != 0:
-			candidates.append(Vector2i(0, dy))
-		if dx != 0:
-			candidates.append(Vector2i(dx, 0))
-	# Add perpendicular options as fallback so the enemy doesn't freeze in dead-ends.
-	candidates.append(Vector2i(1, 0))
-	candidates.append(Vector2i(-1, 0))
-	candidates.append(Vector2i(0, 1))
-	candidates.append(Vector2i(0, -1))
-	for step in candidates:
-		var n: Vector2i = _tile_pos + step
-		if only_traversable:
-			if _is_traversable(n):
-				return step
-		else:
-			if _is_in_bounds(n):
-				return step
-	return Vector2i.ZERO
-
-
-func _pick_dig_target() -> Vector2i:
-	# Prefer a dirt tile in the direction of the queen; never dig stone.
+func _queen_direction_steps() -> Array:
+	# Returns the up-to-2 directional steps that point toward the queen,
+	# longer-axis first (e.g. queen far below and slightly right → [(0,1), (1,0)]).
 	var dx: int = sign(_queen_tile.x - _tile_pos.x)
 	var dy: int = sign(_queen_tile.y - _tile_pos.y)
-	var preferred: Array = []
+	var steps: Array = []
 	if abs(_queen_tile.x - _tile_pos.x) >= abs(_queen_tile.y - _tile_pos.y):
 		if dx != 0:
-			preferred.append(Vector2i(dx, 0))
+			steps.append(Vector2i(dx, 0))
 		if dy != 0:
-			preferred.append(Vector2i(0, dy))
+			steps.append(Vector2i(0, dy))
 	else:
 		if dy != 0:
-			preferred.append(Vector2i(0, dy))
+			steps.append(Vector2i(0, dy))
 		if dx != 0:
-			preferred.append(Vector2i(dx, 0))
-	# Fallback: any 4-direction dirt tile.
-	for dir in DIRS:
-		if not (dir in preferred):
-			preferred.append(dir)
-	for dir in preferred:
-		var n: Vector2i = _tile_pos + dir
-		if _is_dirt(n):
-			return n
-	return Vector2i(-1, -1)
+			steps.append(Vector2i(dx, 0))
+	return steps
+
+
+func _move_into(next_tile: Vector2i) -> void:
+	_is_moving = true
+	_tile_pos = next_tile
+	_move_tween = create_tween()
+	_move_tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
+	_move_tween.tween_callback(_on_step_done)
 
 
 func _start_digging(target: Vector2i) -> void:

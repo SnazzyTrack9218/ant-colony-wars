@@ -127,11 +127,14 @@ func _count_pending_plans(room_type: String) -> int:
 
 
 func _find_buildable_tunnel_tile() -> Vector2i:
-	# BFS outward from the starting hall (one tile above queen) through tunnel
-	# tiles; first unoccupied tunnel wins.
+	# Smarter placement: BFS through tunnel tiles, score every candidate, pick
+	# the best one. Scoring prefers:
+	# - close-ish to queen (but not adjacent — leave the choke point clear)
+	# - tiles with at least 2 tunnel neighbors (so we don't dead-end a corridor)
+	# - tiles not directly between queen and the nearest tunnel-frontier
+	var room_manager: RoomManager = GameManager.room_manager
 	var start: Vector2i = _queen_tile + Vector2i(0, -1)
 	if not _tile_is_tunnel(start):
-		# Fall back: scan a small box around queen for any tunnel tile.
 		for dy in range(-3, 1):
 			for dx in range(-5, 6):
 				var c: Vector2i = _queen_tile + Vector2i(dx, dy)
@@ -142,13 +145,15 @@ func _find_buildable_tunnel_tile() -> Vector2i:
 				break
 	if not _tile_is_tunnel(start):
 		return Vector2i(-1, -1)
+
+	# BFS to enumerate candidate tunnel tiles within reach.
 	var queue: Array = [start]
 	var visited: Dictionary = {start: true}
-	var room_manager: RoomManager = GameManager.room_manager
+	var candidates: Array = []
 	while not queue.is_empty():
 		var current: Vector2i = queue.pop_front()
 		if not _is_occupied(current, room_manager):
-			return current
+			candidates.append(current)
 		for dir in DIRS:
 			var n: Vector2i = current + dir
 			if n in visited:
@@ -157,7 +162,41 @@ func _find_buildable_tunnel_tile() -> Vector2i:
 				continue
 			visited[n] = true
 			queue.append(n)
-	return Vector2i(-1, -1)
+
+	if candidates.is_empty():
+		return Vector2i(-1, -1)
+
+	# Score each candidate; lower is better.
+	var best: Vector2i = candidates[0]
+	var best_score: float = INF
+	for tile in candidates:
+		var score: float = _score_room_tile(tile)
+		if score < best_score:
+			best_score = score
+			best = tile
+	return best
+
+
+func _score_room_tile(tile: Vector2i) -> float:
+	# Lower = better. Distance is the base; the rest are penalties/bonuses.
+	var dist_to_queen: int = abs(tile.x - _queen_tile.x) + abs(tile.y - _queen_tile.y)
+	var score: float = float(dist_to_queen)
+	# Don't fill the queen's choke point — soldiers need to hold there.
+	if dist_to_queen <= 2:
+		score += 50.0
+	# Count tunnel neighbors to figure out tile type.
+	var tunnel_neighbors: int = 0
+	for dir in DIRS:
+		if _tile_is_tunnel(tile + dir):
+			tunnel_neighbors += 1
+	# Stubs (1 neighbor): great — natural room alcove.
+	# Corridors (2 neighbors): bad — would block traffic. Big penalty.
+	# Junctions (3+ neighbors): okay — usually have room around them.
+	if tunnel_neighbors == 2:
+		score += 20.0
+	elif tunnel_neighbors >= 3:
+		score -= 3.0
+	return score
 
 
 func _tile_is_tunnel(pos: Vector2i) -> bool:
