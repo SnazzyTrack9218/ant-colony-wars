@@ -12,6 +12,7 @@ var _max_hp: int = 18
 var _damage: int = 6
 var _attack_cooldown: float = 0.9
 var _move_time: float = 0.18
+var _dig_duration: float = 3.5
 var _enemy_color: Color = Color(0.85, 0.25, 0.25, 1.0)
 var _config_path: String = ""
 var _enemy_kind: String = "spider"
@@ -20,6 +21,7 @@ var _enemy_kind: String = "spider"
 var _hp: int = 18
 var _attack_cooldown_remaining: float = 0.0
 var _is_moving: bool = false
+var _is_digging: bool = false
 var _move_tween: Tween
 var _think_cooldown: float = 0.0
 
@@ -92,6 +94,7 @@ func _load_config() -> void:
 	_damage = int(data.get("damage", _damage))
 	_attack_cooldown = float(data.get("attack_cooldown", _attack_cooldown))
 	_move_time = float(data.get("move_time", _move_time))
+	_dig_duration = float(data.get("dig_duration", _dig_duration))
 	if "color" in data:
 		var c = data["color"]
 		if c is Array and c.size() >= 4:
@@ -158,23 +161,26 @@ func _attack_room_if_ready(room_tile: Vector2i) -> void:
 
 
 func _take_step_toward_queen() -> void:
-	var step: Vector2i = _greedy_step_toward(_queen_tile)
-	if step == Vector2i.ZERO:
-		# Cannot move; brief retry delay.
-		_think_cooldown = 0.4
+	# 1) Walk through any adjacent traversable tile (tunnel/queen/sky) toward queen.
+	var walk_step: Vector2i = _greedy_step_toward(_queen_tile, true)
+	if walk_step != Vector2i.ZERO:
+		var next_tile: Vector2i = _tile_pos + walk_step
+		_is_moving = true
+		_tile_pos = next_tile
+		_move_tween = create_tween()
+		_move_tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
+		_move_tween.tween_callback(_on_step_done)
 		return
-	var next_tile: Vector2i = _tile_pos + step
-	if not _is_traversable(next_tile):
-		_think_cooldown = 0.4
+	# 2) No walkable step → try to dig through adjacent dirt toward queen.
+	var dig_target: Vector2i = _pick_dig_target()
+	if dig_target != Vector2i(-1, -1):
+		_start_digging(dig_target)
 		return
-	_is_moving = true
-	_tile_pos = next_tile
-	_move_tween = create_tween()
-	_move_tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
-	_move_tween.tween_callback(_on_step_done)
+	# 3) Surrounded by stone or world edge — wait briefly.
+	_think_cooldown = 0.6
 
 
-func _greedy_step_toward(target: Vector2i) -> Vector2i:
+func _greedy_step_toward(target: Vector2i, only_traversable: bool) -> Vector2i:
 	# Try axis with largest delta first; fall back to others.
 	var dx: int = sign(target.x - _tile_pos.x)
 	var dy: int = sign(target.y - _tile_pos.y)
@@ -189,16 +195,75 @@ func _greedy_step_toward(target: Vector2i) -> Vector2i:
 			candidates.append(Vector2i(0, dy))
 		if dx != 0:
 			candidates.append(Vector2i(dx, 0))
-	# Add perpendicular options as fallback.
+	# Add perpendicular options as fallback so the enemy doesn't freeze in dead-ends.
 	candidates.append(Vector2i(1, 0))
 	candidates.append(Vector2i(-1, 0))
 	candidates.append(Vector2i(0, 1))
 	candidates.append(Vector2i(0, -1))
 	for step in candidates:
 		var n: Vector2i = _tile_pos + step
-		if _is_traversable(n):
-			return step
+		if only_traversable:
+			if _is_traversable(n):
+				return step
+		else:
+			if _is_in_bounds(n):
+				return step
 	return Vector2i.ZERO
+
+
+func _pick_dig_target() -> Vector2i:
+	# Prefer a dirt tile in the direction of the queen; never dig stone.
+	var dx: int = sign(_queen_tile.x - _tile_pos.x)
+	var dy: int = sign(_queen_tile.y - _tile_pos.y)
+	var preferred: Array = []
+	if abs(_queen_tile.x - _tile_pos.x) >= abs(_queen_tile.y - _tile_pos.y):
+		if dx != 0:
+			preferred.append(Vector2i(dx, 0))
+		if dy != 0:
+			preferred.append(Vector2i(0, dy))
+	else:
+		if dy != 0:
+			preferred.append(Vector2i(0, dy))
+		if dx != 0:
+			preferred.append(Vector2i(dx, 0))
+	# Fallback: any 4-direction dirt tile.
+	for dir in DIRS:
+		if not (dir in preferred):
+			preferred.append(dir)
+	for dir in preferred:
+		var n: Vector2i = _tile_pos + dir
+		if _is_dirt(n):
+			return n
+	return Vector2i(-1, -1)
+
+
+func _start_digging(target: Vector2i) -> void:
+	_is_digging = true
+	_think_cooldown = _dig_duration
+	# After dig_duration, convert dirt → tunnel and step into it.
+	get_tree().create_timer(_dig_duration).timeout.connect(func():
+		if not is_instance_valid(self) or not is_instance_valid(_tile_map):
+			return
+		# Re-validate: tile may have been changed by a worker in the meantime.
+		if not _is_dirt(target):
+			_is_digging = false
+			return
+		_tile_map.set_cell(target, _sid_tunnel, Vector2i(0, 0))
+		_is_digging = false
+		# Move into the freshly-dug tile next think-tick.
+	)
+
+
+func _is_dirt(pos: Vector2i) -> bool:
+	if not _is_in_bounds(pos):
+		return false
+	if pos.y < _surface_row:
+		return false  # Sky is not dirt.
+	return _tile_map.get_cell_source_id(pos) == _sid_dirt
+
+
+func _is_in_bounds(pos: Vector2i) -> bool:
+	return pos.x >= 0 and pos.x < _world_w and pos.y >= 0 and pos.y < _world_h
 
 
 func _on_step_done() -> void:

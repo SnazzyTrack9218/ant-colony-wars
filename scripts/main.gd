@@ -4,6 +4,7 @@ const TILE_SIZE: int = 16
 const WorkerAntScene: PackedScene = preload("res://scenes/ants/worker_ant.tscn")
 const SoldierAntScene: PackedScene = preload("res://scenes/ants/soldier_ant.tscn")
 const GameOverScene: PackedScene = preload("res://scenes/ui/game_over_screen.tscn")
+const PauseMenuScene: PackedScene = preload("res://scenes/ui/pause_menu.tscn")
 const EnemySpawnerScript: GDScript = preload("res://scripts/core/enemy_spawner.gd")
 const WorldGeneratorScript: GDScript = preload("res://scripts/core/world_generator.gd")
 const ROOM_TYPE_ORDER: Array[String] = [
@@ -71,6 +72,8 @@ func _ready() -> void:
 	_center_camera()
 	_setup_enemy_spawner()
 	_setup_game_over_screen()
+	_setup_pause_menu()
+	_setup_colony_director()
 	_connect_room_picker()
 	AudioManager.play_music_mode("peace")
 	_connect_room_manager()
@@ -110,6 +113,22 @@ func _setup_enemy_spawner() -> void:
 func _setup_game_over_screen() -> void:
 	_game_over_layer = GameOverScene.instantiate()
 	add_child(_game_over_layer)
+
+
+func _setup_pause_menu() -> void:
+	var pause: CanvasLayer = PauseMenuScene.instantiate()
+	add_child(pause)
+
+
+func _setup_colony_director() -> void:
+	if GameManager.director == null:
+		return
+	GameManager.director.configure(
+			_tile_map,
+			_sid["tunnel"],
+			Vector2i(_queen_col, _queen_row),
+			_world_w,
+			_world_h)
 
 
 func _connect_room_picker() -> void:

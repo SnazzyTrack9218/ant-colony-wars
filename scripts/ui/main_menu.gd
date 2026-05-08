@@ -2,8 +2,10 @@ extends Control
 
 const MAIN_SCENE_PATH: String = "res://scenes/main/main.tscn"
 const SettingsMenuScene: PackedScene = preload("res://scenes/ui/settings_menu.tscn")
+const ControlsHelpScene: PackedScene = preload("res://scenes/ui/controls_help.tscn")
 
 var _settings_menu: Control
+var _controls_help: CanvasLayer
 
 
 func _ready() -> void:
@@ -24,7 +26,7 @@ func _build_menu() -> void:
 	add_child(center)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(420, 330)
+	panel.custom_minimum_size = Vector2(420, 380)
 	panel.add_theme_stylebox_override("panel", ColonyUITheme.panel_style(6, true))
 	center.add_child(panel)
 
@@ -52,6 +54,7 @@ func _build_menu() -> void:
 	rows.add_child(subtitle)
 
 	_add_button(rows, "New Game", Callable(self, "_on_new_game_pressed"))
+	_add_button(rows, "Controls", Callable(self, "_on_controls_pressed"))
 	_add_button(rows, "Settings", Callable(self, "_on_settings_pressed"))
 	_add_button(rows, "Quit", Callable(self, "_on_quit_pressed"))
 
@@ -59,6 +62,13 @@ func _build_menu() -> void:
 	_settings_menu.visible = false
 	_settings_menu.back_requested.connect(_on_settings_back_requested)
 	add_child(_settings_menu)
+
+	_controls_help = ControlsHelpScene.instantiate()
+	add_child(_controls_help)
+
+
+func _on_controls_pressed() -> void:
+	_controls_help.show_help()
 
 
 func _add_button(parent: VBoxContainer, button_text: String, callback: Callable) -> void:
