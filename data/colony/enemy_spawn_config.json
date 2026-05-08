@@ -1,0 +1,12 @@
+{
+    "spawn_interval_start": 24.0,
+    "spawn_interval_min": 9.0,
+    "spawn_interval_decay": 0.85,
+    "wave_grow_after_seconds": 60.0,
+    "max_concurrent_enemies": 12,
+    "first_spawn_delay": 25.0,
+    "spawn_chances": {
+        "spider": 0.7,
+        "beetle": 0.3
+    }
+}

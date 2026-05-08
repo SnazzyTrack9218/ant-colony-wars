@@ -1,0 +1,7 @@
+{
+    "priority_weight_scale": 100.0,
+    "distance_bonus_scale": 10.0,
+    "danger_penalty_scale": 5.0,
+    "resource_urgency_scale": 3.0,
+    "solo_category_bonus": 2.0
+}

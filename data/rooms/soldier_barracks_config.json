@@ -1,0 +1,8 @@
+{
+    "display_name": "Soldier Barracks",
+    "build_cost": 18,
+    "build_food_per_tick": 1,
+    "training_interval": 20.0,
+    "training_food_cost": 5,
+    "placeable": true
+}

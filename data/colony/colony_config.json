@@ -2,10 +2,14 @@
     "starting_workers": 5,
     "starting_food": 0,
     "max_food": 200,
-    "food_source_count": 4,
-    "world_width": 60,
-    "world_height": 40,
+    "max_workers": 20,
+    "queen_hp": 100,
+    "queen_max_hp": 100,
+    "food_source_count": 8,
+    "world_width": 120,
+    "world_height": 80,
     "surface_row": 5,
-    "queen_col": 30,
-    "queen_row": 27
+    "queen_col": 60,
+    "queen_row": 54,
+    "debug_instant_build": false
 }

@@ -1,0 +1,8 @@
+{
+    "display_name": "Guard Post",
+    "build_cost": 8,
+    "build_food_per_tick": 1,
+    "detection_radius_bonus": 5,
+    "effect_radius": 10,
+    "placeable": true
+}

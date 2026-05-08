@@ -1,0 +1,29 @@
+{
+    "enabled": true,
+    "tick_interval": 4.0,
+    "build_targets": [
+        {"room_type": "nursery",          "max_count": 3, "food_floor": 12},
+        {"room_type": "food_storage",     "max_count": 2, "food_floor": 18},
+        {"room_type": "mushroom_farm",    "max_count": 2, "food_floor": 14},
+        {"room_type": "soldier_barracks", "max_count": 2, "food_floor": 22},
+        {"room_type": "guard_post",       "max_count": 1, "food_floor": 14}
+    ],
+    "build_order": [
+        "nursery",
+        "food_storage",
+        "mushroom_farm",
+        "soldier_barracks",
+        "guard_post"
+    ],
+    "upgrade_food_reserve": 30,
+    "auto_upgrade_priority": [
+        "dig_speed",
+        "carry_capacity",
+        "ant_limit",
+        "faster_hatch",
+        "soldier_damage"
+    ],
+    "auto_rally_enabled": true,
+    "auto_rally_threat_radius": 14,
+    "auto_rally_min_relocate_dist": 4
+}

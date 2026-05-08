@@ -1,0 +1,7 @@
+{
+    "display_name": "Food Storage",
+    "build_cost": 10,
+    "build_food_per_tick": 1,
+    "max_food_bonus": 75,
+    "placeable": true
+}
