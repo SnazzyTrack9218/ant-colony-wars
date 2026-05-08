@@ -11,6 +11,7 @@ var colony: ColonyState
 var job_queue: JobQueue
 var room_manager: RoomManager
 var upgrades: UpgradeManager
+var threat: ThreatTracker
 var director: ColonyDirector
 
 
@@ -25,6 +26,8 @@ func _ready() -> void:
 	add_child(room_manager)
 	upgrades = UpgradeManager.new()
 	add_child(upgrades)
+	threat = ThreatTracker.new()
+	add_child(threat)
 	director = ColonyDirector.new()
 	add_child(director)
 	print("GameManager: initialized")

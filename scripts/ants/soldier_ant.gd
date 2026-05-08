@@ -245,11 +245,23 @@ func _rally_move_tick() -> void:
 
 
 func _at_rally_tick() -> void:
+	# If the rally job was cancelled (externally cleared), drop back to patrol.
+	if _current_rally_job == null:
+		_state = State.IDLE_PATROL
+		return
 	if _is_moving:
 		return
 	# Hold near rally; small wander allowed within patrol_radius around anchor.
 	if randf() < 0.10:
 		_wander_within_patrol_radius()
+
+
+func release_rally_externally() -> void:
+	# Called by main.gd when a rally marker is cancelled. Resets state immediately.
+	_current_rally_job = null
+	if _state == State.AT_RALLY or _state == State.MOVE_TO_RALLY:
+		_state = State.IDLE_PATROL
+		_path.clear()
 
 
 # ── Movement ──────────────────────────────────────────────────────────────────

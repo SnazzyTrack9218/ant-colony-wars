@@ -401,6 +401,11 @@ func _try_place_dig_target(target: Vector2i) -> void:
 func _try_place_room_plan(target: Vector2i) -> void:
 	if target.x < 0 or target.x >= _world_w or target.y < 0 or target.y >= _world_h:
 		return
+	# Right-click on an existing blueprint → cancel it.
+	if GameManager.room_manager.has_plan_at(target):
+		GameManager.room_manager.cancel_plan_at(target)
+		AudioManager.play_marker_placed()
+		return
 	if _tile_map.get_cell_source_id(target) != _sid["tunnel"]:
 		return
 	if target in _protected:
@@ -438,10 +443,12 @@ func _cancel_rally_marker_at(target: Vector2i) -> void:
 	if job_id_to_remove == -1:
 		return
 	# Release any soldier currently holding the rally so they go back to patrol.
+	# Use the soldier's public method so AT_RALLY → IDLE_PATROL transitions cleanly.
 	for soldier in get_tree().get_nodes_in_group("soldiers"):
-		if "_current_rally_job" in soldier and soldier._current_rally_job != null \
-				and soldier._current_rally_job.id == job_id_to_remove:
-			soldier._current_rally_job = null
+		if soldier.has_method("release_rally_externally"):
+			if "_current_rally_job" in soldier and soldier._current_rally_job != null \
+					and soldier._current_rally_job.id == job_id_to_remove:
+				soldier.release_rally_externally()
 	GameManager.job_queue.cancel_job_at(JobQueue.TYPE_RALLY, target)
 	_remove_rally_marker_visual(job_id_to_remove)
 
@@ -554,10 +561,17 @@ func _on_job_completed(job: JobQueue.Job) -> void:
 func _connect_room_manager() -> void:
 	GameManager.room_manager.room_plan_created.connect(_on_room_plan_created)
 	GameManager.room_manager.room_plan_updated.connect(_on_room_plan_updated)
+	GameManager.room_manager.room_plan_cancelled.connect(_on_room_plan_cancelled)
 	GameManager.room_manager.room_completed.connect(_on_room_completed)
 	GameManager.room_manager.worker_spawn_requested.connect(_on_worker_spawn_requested)
 	GameManager.room_manager.soldier_spawn_requested.connect(_on_soldier_spawn_requested)
 	GameManager.room_manager.room_destroyed.connect(_on_room_destroyed)
+
+
+func _on_room_plan_cancelled(plan_id: int, _tile_pos: Vector2i) -> void:
+	if plan_id in _room_plan_nodes:
+		_room_plan_nodes[plan_id].queue_free()
+		_room_plan_nodes.erase(plan_id)
 
 
 func _on_room_destroyed(room_id: int, _room_type: String, _tile_pos: Vector2i) -> void:

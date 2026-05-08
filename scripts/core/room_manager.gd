@@ -3,6 +3,7 @@ class_name RoomManager
 
 signal room_plan_created(plan_id: int, room_type: String, tile_pos: Vector2i, build_cost: int)
 signal room_plan_updated(plan_id: int, progress: int, build_cost: int)
+signal room_plan_cancelled(plan_id: int, tile_pos: Vector2i)
 signal room_completed(plan_id: int, room_type: String, tile_pos: Vector2i)
 signal worker_spawn_requested(tile_pos: Vector2i)
 signal soldier_spawn_requested(tile_pos: Vector2i)
@@ -139,6 +140,29 @@ func _complete_plan(plan_id: int) -> void:
 	}
 	_apply_completion_effect(room_type)
 	room_completed.emit(plan_id, room_type, tile_pos)
+
+
+func cancel_plan_at(tile_pos: Vector2i) -> int:
+	# Returns the cancelled plan_id, or -1 if no plan was at that tile.
+	# No food refund — the food paid into progress is consumed by the worker's trips.
+	for plan_id in _plans.keys():
+		var plan: Dictionary = _plans[plan_id]
+		if Vector2i(plan.get("tile_pos", Vector2i.ZERO)) != tile_pos:
+			continue
+		_plans.erase(plan_id)
+		_occupied_tiles.erase(tile_pos)
+		GameManager.job_queue.cancel_job_at(JobQueue.TYPE_BUILD, tile_pos)
+		room_plan_cancelled.emit(plan_id, tile_pos)
+		return plan_id
+	return -1
+
+
+func has_plan_at(tile_pos: Vector2i) -> bool:
+	for plan_id in _plans:
+		var plan: Dictionary = _plans[plan_id]
+		if Vector2i(plan.get("tile_pos", Vector2i.ZERO)) == tile_pos:
+			return true
+	return false
 
 
 func get_room_at(tile_pos: Vector2i) -> Dictionary:

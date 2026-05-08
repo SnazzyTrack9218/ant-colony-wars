@@ -7,6 +7,7 @@ const CONTROLS: Array = [
 	{"keys": "Left-click dirt", "action": "Place a Dig Marker — workers will dig there."},
 	{"keys": "Left-click dig marker", "action": "Cancel that dig order."},
 	{"keys": "Right-click tunnel", "action": "Place a Room Plan blueprint of the selected room."},
+	{"keys": "Right-click blueprint", "action": "Cancel that build."},
 	{"keys": "Middle-click tunnel", "action": "Place a Rally Marker — soldiers go and hold position."},
 	{"keys": "Middle-click rally marker", "action": "Cancel that rally order; soldiers return to patrol."},
 	{"keys": "Shift + Left-click", "action": "Repair Marker on a damaged room — workers haul food to repair."},
@@ -17,7 +18,8 @@ const CONTROLS: Array = [
 	{"keys": "Esc", "action": "Open the pause menu (or close this help screen)."},
 	{"keys": "WASD / Arrow keys", "action": "Pan the camera around the map."},
 	{"keys": "Mouse wheel", "action": "Zoom in / out."},
-	{"keys": "Autopilot", "action": "The colony auto-places rooms and auto-buys upgrades on its own. You can override anytime."},
+	{"keys": "Autopilot", "action": "The colony auto-builds rooms and auto-buys upgrades. You can override anytime."},
+	{"keys": "Auto-defense", "action": "When an enemy gets near the queen, soldiers auto-rally to intercept it. Guard Posts are placed at the busiest threat tunnels."},
 ]
 
 @onready var _bg: ColorRect = $Background
