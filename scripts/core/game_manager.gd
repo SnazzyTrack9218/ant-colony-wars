@@ -11,9 +11,11 @@ var colony: ColonyState
 var job_queue: JobQueue
 var room_manager: RoomManager
 var upgrades: UpgradeManager
-var threat: ThreatTracker
-var pheromones: PheromoneMap
-var director: ColonyDirector
+# Untyped to avoid class-load-order parse errors when other scripts read these
+# via GameManager.* before the corresponding class_name has been registered.
+var threat
+var pheromones
+var director
 
 
 func _ready() -> void:
