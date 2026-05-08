@@ -1,0 +1,17 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/room_picker.gd" id="1_picker"]
+
+[node name="RoomPicker" type="PanelContainer"]
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -180.0
+offset_top = -56.0
+offset_right = 180.0
+offset_bottom = -10.0
+script = ExtResource("1_picker")
+
+[node name="Row" type="HBoxContainer" parent="."]
+theme_override_constants/separation = 6

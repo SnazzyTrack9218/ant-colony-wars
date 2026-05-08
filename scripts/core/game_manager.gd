@@ -10,6 +10,7 @@ signal queen_damaged(current_hp: int, max_hp: int)
 var colony: ColonyState
 var job_queue: JobQueue
 var room_manager: RoomManager
+var upgrades: UpgradeManager
 
 
 func _ready() -> void:
@@ -21,6 +22,8 @@ func _ready() -> void:
 	add_child(job_queue)
 	room_manager = RoomManager.new()
 	add_child(room_manager)
+	upgrades = UpgradeManager.new()
+	add_child(upgrades)
 	print("GameManager: initialized")
 
 

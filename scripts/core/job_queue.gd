@@ -8,12 +8,16 @@ const TYPE_DIG := 0
 const TYPE_GATHER := 1
 const TYPE_BUILD := 2
 const TYPE_RALLY := 3
+const TYPE_REPAIR := 4
+const TYPE_EMERGENCY := 5
 
 const CATEGORY_BY_TYPE: Dictionary = {
 	TYPE_DIG: "digging",
 	TYPE_GATHER: "food",
 	TYPE_BUILD: "building",
 	TYPE_RALLY: "defense",
+	TYPE_REPAIR: "repair",
+	TYPE_EMERGENCY: "digging",
 }
 
 var _priority_weight_scale: float = 100.0
@@ -123,6 +127,14 @@ func has_job(type: int, tile_pos: Vector2i) -> bool:
 	return false
 
 
+func cancel_job_at(type: int, tile_pos: Vector2i) -> void:
+	# Removes the job (without firing job_completed) — used for expiring markers.
+	for i in range(_jobs.size()):
+		if _jobs[i].type == type and _jobs[i].tile_pos == tile_pos:
+			_jobs.remove_at(i)
+			return
+
+
 func _get_persistent_job_data(job) -> Dictionary:
 	var preserved: Dictionary = {}
 	for key in ["purpose", "plan_id", "room_type"]:
@@ -141,11 +153,16 @@ func _score_job(job, ant_tile: Vector2i, distance_lookup: Callable = Callable())
 	var danger_level := 0.0
 	var resource_urgency := GameManager.colony.get_resource_urgency(job.category)
 	var solo_bonus := 1.0 if not _has_claimed_job_in_category(job.category) else 0.0
+	# Emergency markers stack a flat huge bonus so ants drop everything to handle them.
+	var emergency_bonus: float = 0.0
+	if job.data.get("emergency", false):
+		emergency_bonus = 500.0
 	return (priority_weight * _priority_weight_scale) \
 			+ (_distance_bonus_scale / (float(dist) + 1.0)) \
 			- (danger_level * _danger_penalty_scale) \
 			+ (resource_urgency * _resource_urgency_scale) \
-			+ (solo_bonus * _solo_category_bonus)
+			+ (solo_bonus * _solo_category_bonus) \
+			+ emergency_bonus
 
 
 func _get_job_distance(job, ant_tile: Vector2i, distance_lookup: Callable) -> int:

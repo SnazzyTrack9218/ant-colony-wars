@@ -205,7 +205,7 @@ Phase 2 workers are reactive: they only work jobs placed by the player. Phase 3 
 - [x] **World gen v2**: hand-coded layout replaced by procedural generator with stone veins and cave pockets, driven by `world_generation_config.json`
 - [x] **Bigger world**: 120×80 tiles, with WASD/arrow camera panning + zoom from `data/camera/camera_config.json`
 - [ ] **Chunk-dirty tracking**: not implemented — full re-score still happens (performance acceptable at 120×80)
-- [ ] **Worker sprite animation**: still a static amber square — no walk cycle yet
+- [x] **Worker sprite animation**: walk-bob via parallel tween while moving (no atlas swap; simpler approach)
 
 ### Files Changed
 - [x] `scripts/core/world_generator.gd` — new file; procedural gen from config
@@ -364,7 +364,7 @@ Panel gradient: linear top→bottom from `#14141E` to `#0B0B0F`.
 - [x] Dig marker is a thin outline square; pulses once on placement; no solid fill
 - [x] Main menu uses `BG_DARK` background, `PANEL_SURFACE` card, flat buttons
 - [x] No white or light-gray backgrounds anywhere in the UI
-- [ ] All colors come from `ui_theme.gd`; zero per-node color overrides in `.tscn` files (food markers still use raw Color literal in main.gd)
+- [x] All colors come from `ui_theme.gd`; food markers now source amber from `ColonyUITheme.ACCENT_AMBER`
 - [x] Consistent font sizes: 11 / 13 / 16 / 32 via theme constants
 
 ### Acceptance Criteria
@@ -400,11 +400,11 @@ The player never places a finished room. They place a Room Plan Marker in cleare
   - [x] **Food Storage** — raises `colony_state.max_food` by config bonus
   - [x] **Soldier Barracks** — trains a soldier every `training_interval` when soldiers priority is non-low (Phase 7 wire-up)
   - [x] **Mushroom Farm** — passive food income on timer
-  - [ ] **Guard Post** — placeable but no detection-radius effect implemented yet
+  - [x] **Guard Post** — soldiers within `effect_radius` (default 10 tiles) gain `detection_radius_bonus` (default +5)
 - [x] `room_manager.gd` — tracks placed and under-construction rooms
 - [x] Under-construction visual: purple progress-tinted Panel
-- [ ] Debug mode skips build time — not implemented; only the food-cost path exists
-- [ ] Room selection UI panel — keyboard shortcuts only
+- [x] Debug mode skips build time — `debug_instant_build` flag in `colony_config.json`
+- [x] Room selection UI panel — bottom-center HUD picker, syncs with keyboard 1–5/B
 
 ### Files Changed
 - [x] `scripts/core/room_manager.gd` — new file
@@ -418,7 +418,7 @@ The player never places a finished room. They place a Room Plan Marker in cleare
 - [x] Worker claims BUILD job; carries food to site; progress increments
 - [x] Nursery completes → hatches worker after timer; worker count increases until cap
 - [x] Food Storage raises max food shown in HUD
-- [ ] Debug mode: room appears instantly (no debug skip implemented)
+- [x] Debug mode: room appears instantly when `debug_instant_build: true` in colony_config
 - [x] Cannot place Room Plan Marker on dirt or stone tile
 
 ### Acceptance Criteria
@@ -426,7 +426,7 @@ The player never places a finished room. They place a Room Plan Marker in cleare
 - [x] Rooms built by workers over time; never instant
 - [x] Each room has a config JSON file
 - [x] `room_manager.gd` tracks all room states correctly
-- [ ] Guard Post effect not yet implemented (placeable but inert)
+- [x] Guard Post effect implemented — boosts nearby soldier detection radius
 
 ### What NOT to Do in This Phase
 - Do not add soldier ants yet — Barracks can be placed but trains nothing until Phase 7
@@ -490,7 +490,7 @@ Soldiers are trained by the Barracks (Phase 6). They patrol near the queen by de
 
 ---
 
-## Phase 8 — Full Marker Set & Upgrades
+## Phase 8 — Full Marker Set & Upgrades (mostly done)
 
 **Goal:** Complete the marker vocabulary. Add efficiency upgrades.
 
@@ -498,10 +498,10 @@ Soldiers are trained by the Barracks (Phase 6). They patrol near the queen by de
 
 | Marker | Input | Effect |
 |---|---|---|
-| Repair | Left-click damaged room/wall | Worker repairs and removes marker |
-| Emergency | Shift+right-click | All idle ants re-score toward location |
-| Patrol Zone | Drag on tunnel area | Soldiers loop between endpoints |
-| Fortify | Left-click tunnel entrance | Soldier stands guard; attacks on entry |
+| Repair | Shift+left-click on damaged room | Worker repairs the room (1 food per tick) |
+| Emergency | Shift+right-click on dirt | High-priority dig; auto-clears after 30s |
+| Patrol Zone | (deferred — Rally Marker covers most use cases) | — |
+| Fortify | (deferred — Rally Marker covers most use cases) | — |
 
 ### Upgrade System
 Upgrades purchased with food from the HUD upgrades panel.
@@ -517,32 +517,37 @@ Upgrades purchased with food from the HUD upgrades panel.
 All levels and costs in `data/upgrades/upgrades_config.json`.
 
 ### Features
-- [ ] Repair Marker — left-click damaged room/wall; worker repairs and removes marker
-- [ ] Emergency Marker — shift+right-click; all idle ants re-score toward location
-- [ ] Patrol Zone — drag on tunnel area; soldiers loop between endpoints
-- [ ] Fortify — left-click tunnel entrance; soldier holds position and attacks on entry
-- [ ] Upgrade panel in HUD; 5 upgrade types purchased with food
-- [ ] All upgrade levels and costs in `data/upgrades/upgrades_config.json`
+- [x] Repair Marker — shift+left-click damaged room; worker delivers food to repair (1 food / 12 HP per tick)
+- [x] Emergency Marker — shift+right-click on dirt; +500 score bonus drops all ants on it; auto-clears after 30s
+- [ ] Patrol Zone — deferred (Rally Marker covers held-position use case)
+- [ ] Fortify — deferred (Rally Marker covers held-position use case)
+- [x] Upgrade panel in HUD with `U` toggle; 5 upgrade types purchased with food
+- [x] All upgrade levels and costs in `data/upgrades/upgrades_config.json`
+- [x] Room HP system: rooms start at 60 HP; enemies adjacent damage them on attack cooldown; reach 0 HP → room destroyed
 
-### Files Likely Changed
-- [ ] `scripts/core/job_queue.gd` — REPAIR, EMERGENCY, PATROL, FORTIFY job types
-- [ ] `scripts/ants/worker_ant.gd` — REPAIR state
-- [ ] `scripts/ants/soldier_ant.gd` — PATROL, FORTIFY states
-- [ ] `scripts/ui/upgrades_panel.gd` + `scenes/ui/upgrades_panel.tscn`
-- [ ] `data/upgrades/upgrades_config.json`
+### Files Changed
+- [x] `scripts/core/job_queue.gd` — TYPE_RALLY/TYPE_REPAIR/TYPE_EMERGENCY constants; emergency_bonus in scoring; cancel_job_at()
+- [x] `scripts/ants/worker_ant.gd` — REPAIR state + `_do_repair()`; effective dig duration / carry capacity from upgrades
+- [x] `scripts/ants/soldier_ant.gd` — `_get_effective_damage()` from upgrades
+- [x] `scripts/core/room_manager.gd` — room HP, damage_room_at, apply_repair_work, room_destroyed signal
+- [x] `scripts/core/upgrade_manager.gd` — purchase/levels/effect-getters; autoload via GameManager
+- [x] `scripts/ui/upgrades_panel.gd` + `scenes/ui/upgrades_panel.tscn`
+- [x] `scripts/enemies/enemy_base.gd` — adjacent-room damage priority
+- [x] `data/upgrades/upgrades_config.json` — 5 upgrades with cost/effect ladders
 
 ### Test Checklist
-- [ ] Repair Marker on damaged room → worker repairs; marker removed when done
-- [ ] Emergency Marker → all idle ants immediately re-score toward it
-- [ ] Patrol Zone → soldiers loop indefinitely
-- [ ] Fortify → soldier holds position; attacks first enemy that enters
-- [ ] Dig Speed upgrade noticeably speeds up workers
-- [ ] Upgrade costs correctly deducted from food count
+- [x] Repair Marker on damaged room → worker repairs; marker removed when full HP
+- [x] Emergency Marker → all idle workers immediately re-score toward it; auto-clears after 30s
+- [ ] Patrol Zone → deferred
+- [ ] Fortify → deferred
+- [x] Dig Speed upgrade noticeably speeds up workers
+- [x] Upgrade costs correctly deducted from food count
 
 ### Acceptance Criteria
-- [ ] All marker types functional
-- [ ] Upgrade system reads from JSON; applies multipliers correctly
-- [ ] Priority system interacts correctly with all marker types
+- [x] Repair + Emergency markers functional
+- [x] Upgrade system reads from JSON; applies multipliers correctly
+- [x] Priority system interacts correctly with new marker types
+- [ ] Patrol/Fortify deferred — not blocking
 
 ### What NOT to Do in This Phase
 - Do not add multiplayer networking

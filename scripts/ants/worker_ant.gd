@@ -2,12 +2,15 @@ extends Node2D
 
 const TILE_SIZE: int = 16
 const INVALID_TILE: Vector2i = Vector2i(-1, -1)
-const WORKER_JOB_TYPES: Array = [JobQueue.TYPE_DIG, JobQueue.TYPE_GATHER, JobQueue.TYPE_BUILD]
-const WORKER_JOB_CATEGORIES: Array[String] = ["digging", "food", "building"]
+const WORKER_JOB_TYPES: Array = [JobQueue.TYPE_DIG, JobQueue.TYPE_GATHER, JobQueue.TYPE_BUILD, JobQueue.TYPE_REPAIR]
+const WORKER_JOB_CATEGORIES: Array[String] = ["digging", "food", "building", "repair"]
 const FOOD_ROUTE_PURPOSE: String = "food_route"
 const DIRS: Array = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+const ENEMY_GROUP: String = "enemies"
+const FLEE_DANGER_RADIUS: int = 2
+const FLEE_SAFE_RADIUS: int = 4
 
-enum State { IDLE, MOVING, WORKING, IDLE_WANDER }
+enum State { IDLE, MOVING, WORKING, IDLE_WANDER, FLEE }
 
 # Config (overridden from worker_config.json)
 var _move_time: float = 0.12
@@ -86,7 +89,33 @@ func setup(
 	_fit_sprite_to_tile()
 	GameManager.register_worker()
 	GameManager.priority_changed.connect(_on_priority_changed)
+	if GameManager.upgrades != null:
+		GameManager.upgrades.upgrade_changed.connect(_on_upgrade_changed)
+		_apply_upgrades()
 	_enter_idle()
+
+
+func _apply_upgrades() -> void:
+	# Refresh tunable stats from current upgrade levels.
+	var base_dig: float = _move_time  # not used; placeholder
+	pass
+
+
+func _on_upgrade_changed(_upgrade_id: String, _new_level: int) -> void:
+	# No-op — workers query the upgrade manager on demand for dig duration / carry capacity.
+	pass
+
+
+func get_effective_dig_duration() -> float:
+	if GameManager.upgrades == null:
+		return _dig_duration
+	return _dig_duration * GameManager.upgrades.get_dig_duration_multiplier()
+
+
+func get_effective_food_per_gather() -> int:
+	if GameManager.upgrades == null:
+		return _food_per_gather
+	return maxi(1, GameManager.upgrades.get_food_per_gather())
 
 
 func _load_config() -> void:
@@ -123,6 +152,92 @@ func _exit_tree() -> void:
 	if _current_job != null:
 		GameManager.job_queue.release_job(_current_job.id)
 	GameManager.unregister_worker()
+
+
+func _process(_delta: float) -> void:
+	if not is_instance_valid(_tile_map):
+		return
+	# Flee check runs every tick regardless of state.
+	var nearest_enemy_dist: int = _nearest_enemy_distance()
+	if _state == State.FLEE:
+		if nearest_enemy_dist > FLEE_SAFE_RADIUS:
+			# All clear — return to idle and re-score work.
+			_state = State.IDLE
+			_enter_idle()
+			return
+		_flee_tick()
+		return
+	if nearest_enemy_dist <= FLEE_DANGER_RADIUS:
+		_enter_flee()
+
+
+func _nearest_enemy_distance() -> int:
+	var enemies: Array = get_tree().get_nodes_in_group(ENEMY_GROUP)
+	if enemies.is_empty():
+		return 100000
+	var best: int = 100000
+	for e in enemies:
+		if not is_instance_valid(e):
+			continue
+		var et: Vector2i = Vector2i(int(e.global_position.x / TILE_SIZE), int(e.global_position.y / TILE_SIZE))
+		var d: int = abs(et.x - _tile_pos.x) + abs(et.y - _tile_pos.y)
+		if d < best:
+			best = d
+	return best
+
+
+func _enter_flee() -> void:
+	# Drop current job; abandon claimed plan.
+	if _current_job != null:
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+	if is_instance_valid(_move_tween):
+		_move_tween.kill()
+	_is_moving = false
+	_path.clear()
+	_state = State.FLEE
+
+
+func _flee_tick() -> void:
+	if _is_moving:
+		return
+	# Step away from the nearest enemy.
+	var enemy_pos: Vector2i = _nearest_enemy_tile()
+	if enemy_pos == Vector2i(-1, -1):
+		_state = State.IDLE
+		_enter_idle()
+		return
+	var best_step: Vector2i = Vector2i.ZERO
+	var best_dist: int = -1
+	for dir in DIRS:
+		var n: Vector2i = _tile_pos + dir
+		if not _is_traversable(n):
+			continue
+		var d: int = abs(n.x - enemy_pos.x) + abs(n.y - enemy_pos.y)
+		if d > best_dist:
+			best_dist = d
+			best_step = dir
+	if best_step == Vector2i.ZERO:
+		# Cornered — wait a beat and retry.
+		await get_tree().create_timer(0.2).timeout
+		return
+	_path = [_tile_pos + best_step]
+	_move_step()
+
+
+func _nearest_enemy_tile() -> Vector2i:
+	var enemies: Array = get_tree().get_nodes_in_group(ENEMY_GROUP)
+	var best_tile: Vector2i = Vector2i(-1, -1)
+	var best_dist: int = 100000
+	for e in enemies:
+		if not is_instance_valid(e):
+			continue
+		var et: Vector2i = Vector2i(int(e.global_position.x / TILE_SIZE), int(e.global_position.y / TILE_SIZE))
+		var d: int = abs(et.x - _tile_pos.x) + abs(et.y - _tile_pos.y)
+		if d < best_dist:
+			best_dist = d
+			best_tile = et
+	return best_tile
 
 
 # ── FSM ───────────────────────────────────────────────────────────────────────
@@ -312,6 +427,11 @@ func _move_step() -> void:
 	_move_tween = create_tween()
 	_move_tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
 	_move_tween.tween_callback(_on_step_done)
+	# Walk bob runs in parallel via a separate one-shot tween — no chain conflicts.
+	if _sprite != null:
+		var bob := create_tween()
+		bob.tween_property(_sprite, "position:y", -1.5, _move_time * 0.5)
+		bob.tween_property(_sprite, "position:y", 0.0, _move_time * 0.5)
 
 
 func _on_step_done() -> void:
@@ -345,6 +465,8 @@ func _start_working() -> void:
 			_do_gather()
 		JobQueue.TYPE_BUILD:
 			_do_build()
+		JobQueue.TYPE_REPAIR:
+			_do_repair()
 
 
 func _do_dig() -> void:
@@ -368,7 +490,7 @@ func _do_dig() -> void:
 	if abs(_tile_pos.x - next_tile.x) + abs(_tile_pos.y - next_tile.y) != 1:
 		_move_toward_dig_dest()
 		return
-	await get_tree().create_timer(_dig_duration).timeout
+	await get_tree().create_timer(get_effective_dig_duration()).timeout
 	if not is_instance_valid(self) or _current_job == null or not is_instance_valid(_tile_map):
 		return
 	if _current_job.id != job_id:
@@ -408,7 +530,7 @@ func _do_gather() -> void:
 		return
 	if _state != State.WORKING:
 		return
-	GameManager.add_food(_food_per_gather)
+	GameManager.add_food(get_effective_food_per_gather())
 	AudioManager.play_food_gathered()
 	GameManager.job_queue.complete_job(_current_job.id)
 	_current_job = null
@@ -430,6 +552,31 @@ func _do_build() -> void:
 		return
 	var result: String = GameManager.room_manager.apply_build_work(plan_id)
 	if result == "complete" or result == "missing":
+		GameManager.job_queue.complete_job(_current_job.id)
+		_current_job = null
+		_enter_idle()
+		return
+	if result == "no_food":
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+		_enter_idle()
+		return
+	call_deferred("_start_working")
+
+
+func _do_repair() -> void:
+	if _current_job == null:
+		_enter_idle()
+		return
+	var job_id: int = _current_job.id
+	var room_tile: Vector2i = _current_job.tile_pos
+	await get_tree().create_timer(_build_duration).timeout
+	if not is_instance_valid(self) or _current_job == null:
+		return
+	if _current_job.id != job_id or _state != State.WORKING:
+		return
+	var result: String = GameManager.room_manager.apply_repair_work(room_tile)
+	if result == "complete" or result == "missing" or result == "full":
 		GameManager.job_queue.complete_job(_current_job.id)
 		_current_job = null
 		_enter_idle()
@@ -552,6 +699,8 @@ func _can_work_job_from_tile(job, tile: Vector2i) -> bool:
 		JobQueue.TYPE_GATHER:
 			return abs(job.tile_pos.x - tile.x) + abs(job.tile_pos.y - tile.y) == 1
 		JobQueue.TYPE_BUILD:
+			return job.tile_pos == tile
+		JobQueue.TYPE_REPAIR:
 			return job.tile_pos == tile
 	return false
 

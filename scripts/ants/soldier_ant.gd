@@ -305,8 +305,14 @@ func _attack_target_if_ready() -> void:
 	if _current_target == null or not is_instance_valid(_current_target):
 		return
 	if _current_target.has_method("take_damage"):
-		_current_target.take_damage(_damage)
+		_current_target.take_damage(_get_effective_damage())
 		_attack_cooldown_remaining = _attack_cooldown
+
+
+func _get_effective_damage() -> int:
+	if GameManager.upgrades == null:
+		return _damage
+	return int(round(_damage * GameManager.upgrades.get_soldier_damage_multiplier()))
 
 
 func _set_target(target: Node2D) -> void:
@@ -325,6 +331,8 @@ func _can_engage(target: Node2D) -> bool:
 		radius = int(_detection_radius * 1.5)
 	elif defense_level == "emergency":
 		radius = _detection_radius * 3
+	# Guard Post bonus stacks for each post in range.
+	radius += GameManager.room_manager.get_detection_bonus_for_tile(_tile_pos)
 	var target_tile: Vector2i = _world_to_tile(target.global_position)
 	return _manhattan(_tile_pos, target_tile) <= radius
 

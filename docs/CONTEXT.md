@@ -213,7 +213,7 @@ res://
 
 ## Current Development Phase
 
-**Phase 7 — Combat & Enemies** (just landed; Phases 1–6 complete)
+**Phase 8 — Full Marker Set & Upgrades** (just landed; Phases 1–7 complete; Patrol/Fortify deferred)
 
 ---
 

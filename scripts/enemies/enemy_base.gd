@@ -120,7 +120,7 @@ func _process(delta: float) -> void:
 func _update_state(_delta: float) -> void:
 	if not is_instance_valid(_tile_map):
 		return
-	# Priority 1: attack adjacent soldier or queen tile.
+	# Priority 1: attack adjacent soldier first.
 	var adjacent_soldier: Node2D = _find_adjacent_soldier()
 	if adjacent_soldier != null:
 		_attack_target_if_ready(adjacent_soldier)
@@ -128,12 +128,33 @@ func _update_state(_delta: float) -> void:
 	if _is_adjacent_to_queen():
 		_attack_queen_if_ready()
 		return
-	# Priority 2: move closer to queen via straight-line greedy step.
+	# Priority 2: damage any adjacent built room (nursery, food storage, etc.).
+	var damaged_room_tile: Vector2i = _find_adjacent_damageable_room()
+	if damaged_room_tile != Vector2i(-1, -1):
+		_attack_room_if_ready(damaged_room_tile)
+		return
+	# Priority 3: move closer to queen via straight-line greedy step.
 	if _is_moving:
 		return
 	if _think_cooldown > 0.0:
 		return
 	_take_step_toward_queen()
+
+
+func _find_adjacent_damageable_room() -> Vector2i:
+	for dir in DIRS:
+		var n: Vector2i = _tile_pos + dir
+		var room: Dictionary = GameManager.room_manager.get_room_at(n)
+		if not room.is_empty() and String(room.get("type", "")) != "queen_chamber":
+			return n
+	return Vector2i(-1, -1)
+
+
+func _attack_room_if_ready(room_tile: Vector2i) -> void:
+	if _attack_cooldown_remaining > 0.0:
+		return
+	GameManager.room_manager.damage_room_at(room_tile, _damage)
+	_attack_cooldown_remaining = _attack_cooldown
 
 
 func _take_step_toward_queen() -> void:

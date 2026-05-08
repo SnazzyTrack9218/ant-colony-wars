@@ -6,6 +6,13 @@ signal room_plan_updated(plan_id: int, progress: int, build_cost: int)
 signal room_completed(plan_id: int, room_type: String, tile_pos: Vector2i)
 signal worker_spawn_requested(tile_pos: Vector2i)
 signal soldier_spawn_requested(tile_pos: Vector2i)
+signal room_damaged(room_id: int, hp: int, max_hp: int)
+signal room_repaired(room_id: int, hp: int, max_hp: int)
+signal room_destroyed(room_id: int, room_type: String, tile_pos: Vector2i)
+
+const ROOM_MAX_HP: int = 60
+const REPAIR_HP_PER_TICK: int = 12
+const REPAIR_FOOD_COST: int = 1
 
 const CONFIG_DIR: String = "res://data/rooms"
 const CONFIG_SUFFIX: String = "_config.json"
@@ -15,6 +22,7 @@ var _plans: Dictionary = {}
 var _rooms: Dictionary = {}
 var _occupied_tiles: Dictionary = {}
 var _next_plan_id: int = 0
+var debug_instant_build: bool = false
 
 
 func _ready() -> void:
@@ -27,6 +35,25 @@ func _process(delta: float) -> void:
 			continue
 		var room: Dictionary = _rooms[room_id]
 		_tick_room_effect(room, delta)
+
+
+func get_detection_bonus_for_tile(tile: Vector2i) -> int:
+	# Sum detection_radius_bonus from each Guard Post whose effect_radius reaches `tile`.
+	var total: int = 0
+	for room_id in _rooms:
+		var room: Dictionary = _rooms[room_id]
+		if String(room.get("type", "")) != "guard_post":
+			continue
+		var room_tile: Vector2i = Vector2i(room.get("tile_pos", Vector2i.ZERO))
+		var dx: int = abs(room_tile.x - tile.x)
+		var dy: int = abs(room_tile.y - tile.y)
+		var dist: int = dx + dy
+		var config: Dictionary = _configs.get("guard_post", {})
+		var effect_radius: int = int(config.get("effect_radius", 10))
+		var bonus: int = int(config.get("detection_radius_bonus", 0))
+		if dist <= effect_radius:
+			total += bonus
+	return total
 
 
 func get_placeable_room_types() -> Array[String]:
@@ -66,6 +93,11 @@ func create_room_plan(room_type: String, tile_pos: Vector2i) -> int:
 		"progress": 0,
 	}
 	_occupied_tiles[tile_pos] = true
+	if debug_instant_build:
+		# Skip BUILD job entirely; complete immediately.
+		room_plan_created.emit(plan_id, room_type, tile_pos, build_cost)
+		_complete_plan(plan_id)
+		return plan_id
 	var job = GameManager.job_queue.add_job(JobQueue.TYPE_BUILD, tile_pos)
 	job.data["plan_id"] = plan_id
 	job.data["room_type"] = room_type
@@ -102,9 +134,69 @@ func _complete_plan(plan_id: int) -> void:
 		"type": room_type,
 		"tile_pos": tile_pos,
 		"timer": 0.0,
+		"hp": ROOM_MAX_HP,
+		"max_hp": ROOM_MAX_HP,
 	}
 	_apply_completion_effect(room_type)
 	room_completed.emit(plan_id, room_type, tile_pos)
+
+
+func get_room_at(tile_pos: Vector2i) -> Dictionary:
+	for room_id in _rooms:
+		var room: Dictionary = _rooms[room_id]
+		if Vector2i(room.get("tile_pos", Vector2i.ZERO)) == tile_pos:
+			return room
+	return {}
+
+
+func damage_room_at(tile_pos: Vector2i, amount: int) -> void:
+	for room_id in _rooms.keys():
+		var room: Dictionary = _rooms[room_id]
+		if Vector2i(room.get("tile_pos", Vector2i.ZERO)) != tile_pos:
+			continue
+		room["hp"] = maxi(0, int(room.get("hp", ROOM_MAX_HP)) - amount)
+		_rooms[room_id] = room
+		room_damaged.emit(int(room["id"]), int(room["hp"]), int(room["max_hp"]))
+		if int(room["hp"]) == 0:
+			_destroy_room(int(room["id"]))
+		return
+
+
+func _destroy_room(room_id: int) -> void:
+	if not (room_id in _rooms):
+		return
+	var room: Dictionary = _rooms[room_id]
+	var tile_pos: Vector2i = Vector2i(room.get("tile_pos", Vector2i.ZERO))
+	var room_type: String = String(room.get("type", ""))
+	_rooms.erase(room_id)
+	_occupied_tiles.erase(tile_pos)
+	room_destroyed.emit(room_id, room_type, tile_pos)
+
+
+func apply_repair_work(tile_pos: Vector2i) -> String:
+	# Called by worker when standing on/adjacent to a damaged room.
+	var room: Dictionary = get_room_at(tile_pos)
+	if room.is_empty():
+		return "missing"
+	var current_hp: int = int(room.get("hp", ROOM_MAX_HP))
+	var max_hp: int = int(room.get("max_hp", ROOM_MAX_HP))
+	if current_hp >= max_hp:
+		return "full"
+	if not GameManager.spend_food(REPAIR_FOOD_COST):
+		return "no_food"
+	room["hp"] = mini(max_hp, current_hp + REPAIR_HP_PER_TICK)
+	_rooms[int(room["id"])] = room
+	room_repaired.emit(int(room["id"]), int(room["hp"]), max_hp)
+	if int(room["hp"]) >= max_hp:
+		return "complete"
+	return "progress"
+
+
+func is_room_damaged(tile_pos: Vector2i) -> bool:
+	var room: Dictionary = get_room_at(tile_pos)
+	if room.is_empty():
+		return false
+	return int(room.get("hp", ROOM_MAX_HP)) < int(room.get("max_hp", ROOM_MAX_HP))
 
 
 func _apply_completion_effect(room_type: String) -> void:
@@ -125,6 +217,9 @@ func _tick_room_effect(room: Dictionary, delta: float) -> void:
 	elif room_type == "soldier_barracks":
 		interval_key = "training_interval"
 	var interval: float = maxf(0.1, float(config.get(interval_key, 10.0)))
+	# Apply Faster Hatch upgrade only to nursery hatch intervals.
+	if room_type == "nursery" and GameManager.upgrades != null:
+		interval *= GameManager.upgrades.get_hatch_interval_multiplier()
 	room["timer"] = float(room.get("timer", 0.0)) + delta
 	if float(room["timer"]) < interval:
 		_rooms[int(room["id"])] = room

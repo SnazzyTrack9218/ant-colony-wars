@@ -1,0 +1,42 @@
+{
+    "dig_speed": {
+        "display_name": "Dig Speed",
+        "description": "Workers dig faster.",
+        "max_level": 4,
+        "cost_per_level": [40, 80, 140, 220],
+        "multiplier_per_level": [1.0, 0.85, 0.72, 0.60, 0.50],
+        "stat": "dig_duration"
+    },
+    "carry_capacity": {
+        "display_name": "Carry Capacity",
+        "description": "Workers carry more food per trip.",
+        "max_level": 3,
+        "cost_per_level": [50, 110, 200],
+        "multiplier_per_level": [1, 2, 3, 4],
+        "stat": "food_per_gather"
+    },
+    "ant_limit": {
+        "display_name": "Ant Limit",
+        "description": "Raise the worker cap.",
+        "max_level": 3,
+        "cost_per_level": [60, 120, 220],
+        "multiplier_per_level": [20, 28, 36, 44],
+        "stat": "max_workers"
+    },
+    "faster_hatch": {
+        "display_name": "Faster Hatch",
+        "description": "Nurseries hatch eggs sooner.",
+        "max_level": 4,
+        "cost_per_level": [40, 90, 160, 250],
+        "multiplier_per_level": [1.0, 0.85, 0.72, 0.60, 0.50],
+        "stat": "hatch_interval"
+    },
+    "soldier_damage": {
+        "display_name": "Soldier Damage",
+        "description": "Soldiers hit harder.",
+        "max_level": 4,
+        "cost_per_level": [50, 110, 190, 300],
+        "multiplier_per_level": [1.0, 1.25, 1.5, 1.85, 2.25],
+        "stat": "soldier_damage_multiplier"
+    }
+}

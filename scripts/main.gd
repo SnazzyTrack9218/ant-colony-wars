@@ -52,10 +52,12 @@ var _food_positions: Array = []
 @onready var _rooms_root: Node2D = $Rooms
 @onready var _rally_markers_root: Node2D = $RallyMarkers
 @onready var _camera: Camera2D = $Camera2D
+@onready var _hud: CanvasLayer = $HUD
 
 var _enemy_spawner: Node = null
 var _game_over_layer: CanvasLayer = null
 var _rally_marker_nodes: Dictionary = {}  # job_id -> Panel
+var _room_picker: Node = null
 
 
 func _ready() -> void:
@@ -69,6 +71,7 @@ func _ready() -> void:
 	_center_camera()
 	_setup_enemy_spawner()
 	_setup_game_over_screen()
+	_connect_room_picker()
 	AudioManager.play_music_mode("peace")
 	_connect_room_manager()
 	GameManager.job_queue.job_completed.connect(_on_job_completed)
@@ -109,6 +112,21 @@ func _setup_game_over_screen() -> void:
 	add_child(_game_over_layer)
 
 
+func _connect_room_picker() -> void:
+	_room_picker = _hud.get_node_or_null("RoomPicker")
+	if _room_picker == null:
+		return
+	_room_picker.set_selection(_selected_room_index)
+	_room_picker.selection_changed.connect(_on_room_picker_changed)
+
+
+func _on_room_picker_changed(room_type: String) -> void:
+	_selected_room_type = room_type
+	var idx: int = ROOM_TYPE_ORDER.find(room_type)
+	if idx != -1:
+		_selected_room_index = idx
+
+
 func _process(delta: float) -> void:
 	_update_camera_movement(delta)
 
@@ -134,6 +152,7 @@ func _load_config() -> void:
 	_starting_workers = int(data.get("starting_workers", _starting_workers))
 	GameManager.colony.max_food = int(data.get("max_food", GameManager.colony.max_food))
 	GameManager.colony.max_workers = int(data.get("max_workers", GameManager.colony.max_workers))
+	GameManager.room_manager.debug_instant_build = bool(data.get("debug_instant_build", false))
 	GameManager.colony.food = clampi(
 			int(data.get("starting_food", GameManager.colony.food)),
 			0,
@@ -232,11 +251,18 @@ func _place_food_sources() -> void:
 
 
 func _spawn_food_visual(tile_pos: Vector2i) -> void:
-	var rect := ColorRect.new()
-	rect.color = Color(0.2, 0.85, 0.2)
-	rect.size = Vector2(TILE_SIZE, TILE_SIZE)
-	rect.position = Vector2(tile_pos.x * TILE_SIZE, tile_pos.y * TILE_SIZE)
-	_food_markers_root.add_child(rect)
+	# Food sources: outlined amber square — sourced from ui_theme palette so the
+	# whole world UI uses one color language.
+	var marker := Panel.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(ColonyUITheme.ACCENT_AMBER.r, ColonyUITheme.ACCENT_AMBER.g, ColonyUITheme.ACCENT_AMBER.b, 0.55)
+	style.border_color = ColonyUITheme.ACCENT_AMBER
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(0)
+	marker.add_theme_stylebox_override("panel", style)
+	marker.size = Vector2(TILE_SIZE, TILE_SIZE)
+	marker.position = Vector2(tile_pos.x * TILE_SIZE, tile_pos.y * TILE_SIZE)
+	_food_markers_root.add_child(marker)
 
 
 # ── Worker spawning ───────────────────────────────────────────────────────────
@@ -299,8 +325,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_zoom_camera(-_camera_zoom_step, event.position)
 			return
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			var room_tile_pos: Vector2i = _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
-			_try_place_room_plan(room_tile_pos)
+			var right_tile_pos: Vector2i = _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
+			# Shift+right-click → Emergency Marker; plain right-click → Room Plan.
+			if event.shift_pressed:
+				_try_place_emergency_marker(right_tile_pos)
+			else:
+				_try_place_room_plan(right_tile_pos)
 			return
 		if event.button_index == MOUSE_BUTTON_MIDDLE:
 			var rally_tile_pos: Vector2i = _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
@@ -308,17 +338,25 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var tile_pos := _tile_map.local_to_map(_tile_map.to_local(get_global_mouse_position()))
-		_try_place_dig_target(tile_pos)
+		# Shift+left-click on damaged room → Repair Marker; otherwise → Dig Marker.
+		if event.shift_pressed and GameManager.room_manager.is_room_damaged(tile_pos):
+			_try_place_repair_marker(tile_pos)
+		else:
+			_try_place_dig_target(tile_pos)
 
 
 func _handle_room_selection_key(keycode: int) -> void:
 	if keycode == KEY_B:
 		_selected_room_index = posmod(_selected_room_index + 1, ROOM_TYPE_ORDER.size())
 		_selected_room_type = ROOM_TYPE_ORDER[_selected_room_index]
+		if _room_picker != null:
+			_room_picker.set_selection(_selected_room_index)
 		return
 	if keycode >= KEY_1 and keycode <= KEY_5:
 		_selected_room_index = int(keycode - KEY_1)
 		_selected_room_type = ROOM_TYPE_ORDER[_selected_room_index]
+		if _room_picker != null:
+			_room_picker.set_selection(_selected_room_index)
 
 
 func _try_place_dig_target(target: Vector2i) -> void:
@@ -389,17 +427,68 @@ func _remove_rally_marker_visual(job_id: int) -> void:
 		_rally_marker_nodes.erase(job_id)
 
 
-func _add_dig_marker(tile_pos: Vector2i) -> void:
+func _try_place_repair_marker(target: Vector2i) -> void:
+	if not GameManager.room_manager.is_room_damaged(target):
+		return
+	if GameManager.job_queue.has_job(JobQueue.TYPE_REPAIR, target):
+		return
+	GameManager.job_queue.add_job(JobQueue.TYPE_REPAIR, target)
+	AudioManager.play_marker_placed()
+
+
+func _try_place_emergency_marker(target: Vector2i) -> void:
+	if target.x < 0 or target.x >= _world_w or target.y < 0 or target.y >= _world_h:
+		return
+	# Emergency only places on diggable dirt.
+	if _tile_map.get_cell_source_id(target) != _sid["dirt"]:
+		return
+	if target in _protected:
+		return
+	if target in _food_positions:
+		return
+	if target in _dig_marker_nodes:
+		return
+	_add_dig_marker(target, true)
+	AudioManager.play_marker_placed()
+	var job = GameManager.job_queue.add_job(JobQueue.TYPE_DIG, target)
+	if job != null:
+		job.data["emergency"] = true
+	# Auto-clear after 30 seconds even if not completed.
+	get_tree().create_timer(30.0).timeout.connect(func():
+		if target in _dig_marker_nodes and GameManager.job_queue.has_job(JobQueue.TYPE_DIG, target):
+			# Find and release the job; remove visual.
+			GameManager.job_queue.cancel_job_at(JobQueue.TYPE_DIG, target)
+			_remove_dig_marker(target)
+	)
+
+
+func _add_dig_marker(tile_pos: Vector2i, emergency: bool = false) -> void:
 	var marker := Panel.new()
-	marker.add_theme_stylebox_override("panel", _make_dig_marker_style())
+	if emergency:
+		marker.add_theme_stylebox_override("panel", _make_emergency_marker_style())
+	else:
+		marker.add_theme_stylebox_override("panel", _make_dig_marker_style())
 	marker.size = Vector2(TILE_SIZE, TILE_SIZE)
 	marker.pivot_offset = marker.size * 0.5
 	marker.position = Vector2(tile_pos.x * TILE_SIZE, tile_pos.y * TILE_SIZE)
 	_dig_markers_root.add_child(marker)
 	_dig_marker_nodes[tile_pos] = marker
 	var tween: Tween = create_tween()
-	tween.tween_property(marker, "scale", Vector2(1.18, 1.18), 0.11)
-	tween.tween_property(marker, "scale", Vector2.ONE, 0.14)
+	if emergency:
+		tween.tween_property(marker, "scale", Vector2(1.35, 1.35), 0.10)
+		tween.tween_property(marker, "scale", Vector2.ONE, 0.18)
+	else:
+		tween.tween_property(marker, "scale", Vector2(1.18, 1.18), 0.11)
+		tween.tween_property(marker, "scale", Vector2.ONE, 0.14)
+
+
+func _make_emergency_marker_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(ColonyUITheme.ACCENT_RED.r, ColonyUITheme.ACCENT_RED.g, ColonyUITheme.ACCENT_RED.b, 0.18)
+	style.border_color = ColonyUITheme.ACCENT_RED
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(0)
+	return style
 
 
 func _remove_dig_marker(tile_pos: Vector2i) -> void:
@@ -425,6 +514,13 @@ func _connect_room_manager() -> void:
 	GameManager.room_manager.room_completed.connect(_on_room_completed)
 	GameManager.room_manager.worker_spawn_requested.connect(_on_worker_spawn_requested)
 	GameManager.room_manager.soldier_spawn_requested.connect(_on_soldier_spawn_requested)
+	GameManager.room_manager.room_destroyed.connect(_on_room_destroyed)
+
+
+func _on_room_destroyed(room_id: int, _room_type: String, _tile_pos: Vector2i) -> void:
+	if room_id in _room_nodes:
+		_room_nodes[room_id].queue_free()
+		_room_nodes.erase(room_id)
 
 
 func _on_room_plan_created(plan_id: int, room_type: String, tile_pos: Vector2i, _build_cost: int) -> void:

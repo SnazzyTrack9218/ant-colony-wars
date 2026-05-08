@@ -5,7 +5,7 @@ Always read this file before starting any work session.
 
 ---
 
-## NOW — Phase 7: Combat & Enemies
+## NOW — Phase 8: Full Marker Set & Upgrades
 
 Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
@@ -89,19 +89,33 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 - [x] `scripts/core/enemy_spawner.gd` + `data/enemies/*_config.json`
 - [x] `data/ants/soldier_config.json` + `data/colony/enemy_spawn_config.json`
 - [x] Soldier Barracks trains one soldier per `training_interval` when soldiers priority is non-low
-- [ ] Worker flee behavior on enemy proximity (deferred)
+- [x] Worker flee behavior on enemy proximity (FLEE state; danger=2 tiles, safe=4 tiles)
 - [ ] Raid Rally Marker (deferred to multiplayer phase — no enemy queen yet)
 
 ---
 
-## NEXT — Phase 8: Full Marker Set & Upgrades
+## CURRENT — Phase 8: Full Marker Set & Upgrades
 
-- [ ] Repair Marker — left-click damaged room/wall; worker repairs and removes marker
-- [ ] Emergency Marker — shift+right-click; all idle ants re-score toward location
-- [ ] Patrol Zone — drag on tunnel area; soldiers loop between endpoints
-- [ ] Fortify — left-click tunnel entrance; soldier stands guard
-- [ ] Upgrade panel in HUD; 5 upgrade types purchased with food
-- [ ] All upgrade levels and costs in `data/upgrades/upgrades_config.json`
+- [x] Repair Marker — shift+left-click damaged room; worker repairs (1 food / 12 HP per tick)
+- [x] Emergency Marker — shift+right-click on dirt; ants drop everything (auto-clears 30s)
+- [ ] Patrol Zone — deferred (Rally Marker covers held-position use case)
+- [ ] Fortify — deferred (Rally Marker covers held-position use case)
+- [x] Upgrade panel in HUD with `U` toggle; 5 upgrade types
+- [x] All upgrade levels and costs in `data/upgrades/upgrades_config.json`
+- [x] Room HP system: rooms start at 60 HP; enemies adjacent damage them
+- [x] Worker REPAIR state in worker_ant.gd
+- [x] upgrade_manager.gd autoload with effect getters
+
+---
+
+## NEXT — Phase 9: Advanced Colony AI & Seeded World Scale
+
+- [ ] Seeded world generation — same seed produces same map on every run
+- [ ] Dynamic job clustering — diminishing returns on multiple workers per job
+- [ ] Emergency auto-escalation — low food / queen damage / room damage → temp emergency priority
+- [ ] Path optimization — when food priority high, auto-queue tunnel toward known food
+- [ ] Room auto-maintenance — repair priority high → workers auto-generate REPAIR jobs
+- [ ] Pheromone trails — high-traffic paths get speed bonuses
 
 ---
 
@@ -171,3 +185,9 @@ Nothing blocked.
 - Phase 5 completed: shared UI theme script applied to menus, HUD, priority panel, and dig markers (2026-05-07)
 - Phase 6 completed: room configs, room manager, BUILD jobs, worker building, room visuals, storage/nursery/farm effects (2026-05-07)
 - Phase 7 completed: soldier ant FSM with engage/return/rally, spider/beetle enemies, enemy spawner, HP bars, Soldier Barracks training, middle-click rally markers, queen-death game over screen (2026-05-07)
+- Phase 7 polish: worker flee on adjacent enemies; Guard Post detection radius bonus (2026-05-07)
+- Phase 6 polish: Room selection UI panel (HUD) syncing with keyboard 1–5/B; debug_instant_build flag (2026-05-07)
+- Phase 5 polish: food markers themed via ColonyUITheme.ACCENT_AMBER (2026-05-07)
+- Phase 3 polish: worker walk-bob animation while moving via parallel tween (2026-05-07)
+- Worker cap (max_workers=20) enforced in nursery; HUD shows X/20 workers (red at cap), separate soldier count (2026-05-07)
+- Phase 8 completed: upgrade system (5 upgrades), upgrade panel UI (U key), Emergency Marker (shift+RMB), Repair Marker (shift+LMB on damaged room), room HP system with enemy damage on adjacency, room destroyed signal (2026-05-07)

@@ -10,5 +10,6 @@
     "world_height": 80,
     "surface_row": 5,
     "queen_col": 60,
-    "queen_row": 54
+    "queen_row": 54,
+    "debug_instant_build": false
 }
