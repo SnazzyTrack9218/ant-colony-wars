@@ -424,20 +424,27 @@ func _move_step() -> void:
 	_is_moving = true
 	var next_tile: Vector2i = _path.pop_front()
 	_moving_to_tile = next_tile
+	# Pheromone speedup: tiles workers traverse a lot get a step-time bonus.
+	var step_time: float = _move_time
+	if GameManager.pheromones != null:
+		step_time *= GameManager.pheromones.get_speed_multiplier(next_tile)
 	_move_tween = create_tween()
-	_move_tween.tween_property(self, "position", _tile_to_world(next_tile), _move_time)
+	_move_tween.tween_property(self, "position", _tile_to_world(next_tile), step_time)
 	_move_tween.tween_callback(_on_step_done)
 	# Walk bob runs in parallel via a separate one-shot tween — no chain conflicts.
 	if _sprite != null:
 		var bob := create_tween()
-		bob.tween_property(_sprite, "position:y", -1.5, _move_time * 0.5)
-		bob.tween_property(_sprite, "position:y", 0.0, _move_time * 0.5)
+		bob.tween_property(_sprite, "position:y", -1.5, step_time * 0.5)
+		bob.tween_property(_sprite, "position:y", 0.0, step_time * 0.5)
 
 
 func _on_step_done() -> void:
 	_tile_pos = _moving_to_tile
 	position = _tile_to_world(_tile_pos)
 	_is_moving = false
+	# Drop pheromone on the tile we just landed on so highways emerge.
+	if GameManager.pheromones != null:
+		GameManager.pheromones.deposit(_tile_pos)
 	if _try_deferred_rescore():
 		return
 	_move_step()

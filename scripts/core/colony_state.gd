@@ -15,6 +15,12 @@ var queen_hp: int = 100
 var queen_max_hp: int = 100
 var _priority_weights: Dictionary = {}
 
+# Emergency auto-escalation: when a category is auto-raised, the original level
+# is stashed here so we can restore it when the crisis ends. Player-set changes
+# always update both this dict and `priorities` (see set_priority).
+var _player_priorities: Dictionary = {}
+var _auto_escalated: Dictionary = {}  # category -> bool
+
 var priorities: Dictionary = {
 	"food": "normal",
 	"digging": "normal",
@@ -29,6 +35,9 @@ var priorities: Dictionary = {
 
 func _ready() -> void:
 	_load_priority_weights()
+	# Snapshot initial priorities so emergency auto-escalation has somewhere to restore to.
+	for k in priorities.keys():
+		_player_priorities[k] = priorities[k]
 
 
 func _load_priority_weights() -> void:
@@ -60,10 +69,40 @@ func set_priority(category: String, level: String) -> void:
 		return
 	if priorities[category] == level:
 		return
+	# Player setting overrides any auto-escalation; clear that flag.
+	_auto_escalated[category] = false
+	_player_priorities[category] = level
 	priorities[category] = level
 	priority_changed.emit(category, level)
 	if level == "emergency":
 		emergency_priority_set.emit(category)
+
+
+func auto_escalate(category: String) -> void:
+	# Director-only: temporarily force a category to emergency without touching
+	# the player's chosen level. Restored via auto_restore().
+	if not (category in priorities):
+		return
+	if priorities[category] == "emergency":
+		return
+	_auto_escalated[category] = true
+	priorities[category] = "emergency"
+	priority_changed.emit(category, "emergency")
+	emergency_priority_set.emit(category)
+
+
+func auto_restore(category: String) -> void:
+	# Restore the player's chosen level if (and only if) we were the ones who escalated.
+	if not bool(_auto_escalated.get(category, false)):
+		return
+	_auto_escalated[category] = false
+	var restored: String = String(_player_priorities.get(category, "normal"))
+	priorities[category] = restored
+	priority_changed.emit(category, restored)
+
+
+func is_auto_escalated(category: String) -> bool:
+	return bool(_auto_escalated.get(category, false))
 
 
 func cycle_priority(category: String, direction: int) -> void:

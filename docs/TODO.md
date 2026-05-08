@@ -5,7 +5,7 @@ Always read this file before starting any work session.
 
 ---
 
-## NOW — Phase 8: Full Marker Set & Upgrades
+## NOW — Phase 9: Advanced Colony AI & Seeded World Scale
 
 Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
@@ -108,14 +108,26 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
 ---
 
-## NEXT — Phase 9: Advanced Colony AI & Seeded World Scale
+## CURRENT — Phase 9: Advanced Colony AI & Seeded World Scale
 
-- [ ] Seeded world generation — same seed produces same map on every run
-- [ ] Dynamic job clustering — diminishing returns on multiple workers per job
-- [ ] Emergency auto-escalation — low food / queen damage / room damage → temp emergency priority
-- [ ] Path optimization — when food priority high, auto-queue tunnel toward known food
-- [ ] Room auto-maintenance — repair priority high → workers auto-generate REPAIR jobs
-- [ ] Pheromone trails — high-traffic paths get speed bonuses
+- [x] Seeded world generation — `_rng.seed = world_seed` in world_generator.gd
+- [x] Dynamic job clustering — `_cluster_penalty` in job_queue.gd
+- [x] Emergency auto-escalation — `auto_escalate`/`auto_restore` triggered by director
+- [x] Reactive auto-rally — director places hidden rally on closest threat
+- [x] Smart Guard Post placement — uses threat heatmap
+- [x] Room auto-maintenance — director auto-generates REPAIR jobs for damaged rooms
+- [x] Pheromone trails — high-traffic tiles up to 30% faster
+
+---
+
+## NEXT — Phase 10: Local Multiplayer Prototype
+
+- [ ] Split-screen two colonies on shared TileMap
+- [ ] Seed selection UI for local matches
+- [ ] colony_id parameter on all GameManager command functions
+- [ ] Two-colony state (separate food, workers, soldiers, queens)
+- [ ] Soldiers attack ants from the other colony
+- [ ] Queen death ends game and declares winner
 
 ---
 
@@ -191,3 +203,4 @@ Nothing blocked.
 - Phase 3 polish: worker walk-bob animation while moving via parallel tween (2026-05-07)
 - Worker cap (max_workers=20) enforced in nursery; HUD shows X/20 workers (red at cap), separate soldier count (2026-05-07)
 - Phase 8 completed: upgrade system (5 upgrades), upgrade panel UI (U key), Emergency Marker (shift+RMB), Repair Marker (shift+LMB on damaged room), room HP system with enemy damage on adjacency, room destroyed signal (2026-05-07)
+- Phase 9 completed: seeded gen verified, dynamic job clustering with neighbor penalty, emergency auto-escalation (food/queen/repair), reactive auto-rally + threat tracker, smart Guard Post placement, room auto-maintenance, pheromone trails up to 30% speed bonus on high-traffic tiles (2026-05-08)

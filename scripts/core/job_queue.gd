@@ -25,6 +25,11 @@ var _distance_bonus_scale: float = 10.0
 var _danger_penalty_scale: float = 5.0
 var _resource_urgency_scale: float = 3.0
 var _solo_category_bonus: float = 2.0
+# Diminishing returns: penalize a candidate job by how many already-claimed
+# jobs of the same category sit within `_cluster_radius` tiles. Stops
+# multiple workers piling onto a tight cluster of dig tiles.
+var _cluster_radius: int = 4
+var _cluster_penalty_per_neighbor: float = 4.0
 
 class Job:
 	var id: int = 0
@@ -58,6 +63,8 @@ func _load_scoring_config() -> void:
 	_danger_penalty_scale = float(data.get("danger_penalty_scale", _danger_penalty_scale))
 	_resource_urgency_scale = float(data.get("resource_urgency_scale", _resource_urgency_scale))
 	_solo_category_bonus = float(data.get("solo_category_bonus", _solo_category_bonus))
+	_cluster_radius = int(data.get("cluster_radius", _cluster_radius))
+	_cluster_penalty_per_neighbor = float(data.get("cluster_penalty_per_neighbor", _cluster_penalty_per_neighbor))
 
 
 func add_job(type: int, tile_pos: Vector2i):
@@ -157,12 +164,35 @@ func _score_job(job, ant_tile: Vector2i, distance_lookup: Callable = Callable())
 	var emergency_bonus: float = 0.0
 	if job.data.get("emergency", false):
 		emergency_bonus = 500.0
+	# Diminishing returns: spread workers across a cluster instead of piling on one tile.
+	var cluster_penalty: float = _cluster_penalty(job)
 	return (priority_weight * _priority_weight_scale) \
 			+ (_distance_bonus_scale / (float(dist) + 1.0)) \
 			- (danger_level * _danger_penalty_scale) \
 			+ (resource_urgency * _resource_urgency_scale) \
 			+ (solo_bonus * _solo_category_bonus) \
-			+ emergency_bonus
+			+ emergency_bonus \
+			- cluster_penalty
+
+
+func _cluster_penalty(target_job) -> float:
+	# Count claimed jobs in the same category within cluster_radius tiles.
+	# Each adds a flat penalty so jobs in saturated clusters drop in score.
+	if _cluster_radius <= 0:
+		return 0.0
+	var neighbor_count: int = 0
+	for job in _jobs:
+		if job == target_job:
+			continue
+		if job.claimed_by == null:
+			continue
+		if job.category != target_job.category:
+			continue
+		var dist: int = abs(job.tile_pos.x - target_job.tile_pos.x) \
+				+ abs(job.tile_pos.y - target_job.tile_pos.y)
+		if dist <= _cluster_radius:
+			neighbor_count += 1
+	return float(neighbor_count) * _cluster_penalty_per_neighbor
 
 
 func _get_job_distance(job, ant_tile: Vector2i, distance_lookup: Callable) -> int:

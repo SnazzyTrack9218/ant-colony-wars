@@ -213,7 +213,7 @@ res://
 
 ## Current Development Phase
 
-**Phase 8 — Full Marker Set & Upgrades** (just landed; Phases 1–7 complete; Patrol/Fortify deferred)
+**Phase 9 — Advanced Colony AI & Seeded World Scale** (just landed; Phases 1–8 complete)
 
 ---
 

@@ -81,9 +81,66 @@ func _process(delta: float) -> void:
 
 
 func _tick_autopilot() -> void:
+	_try_auto_escalate()
 	_try_auto_build()
 	_try_auto_upgrade()
 	_try_auto_rally()
+	_try_auto_repair()
+
+
+func _try_auto_escalate() -> void:
+	# Crisis triggers temporarily force a category to "emergency". Each is
+	# restored to the player's chosen level once the crisis ends. The player
+	# can manually override at any time and we won't fight them.
+	var colony = GameManager.colony
+	# Food crisis: < 15% of cap.
+	var food_ratio: float = 0.0
+	if colony.max_food > 0:
+		food_ratio = float(colony.food) / float(colony.max_food)
+	if food_ratio < 0.15 and colony.max_food > 0:
+		colony.auto_escalate("food")
+	elif food_ratio > 0.40:
+		colony.auto_restore("food")
+	# Defense crisis: queen below half HP.
+	var queen_ratio: float = 0.0
+	if colony.queen_max_hp > 0:
+		queen_ratio = float(colony.queen_hp) / float(colony.queen_max_hp)
+	if queen_ratio < 0.50 and colony.queen_max_hp > 0:
+		colony.auto_escalate("defense")
+	elif queen_ratio > 0.85:
+		colony.auto_restore("defense")
+	# Repair crisis: any room below 30% HP.
+	var any_room_critical: bool = false
+	for room_id in GameManager.room_manager._rooms:
+		var room: Dictionary = GameManager.room_manager._rooms[room_id]
+		var hp: int = int(room.get("hp", 0))
+		var mhp: int = int(room.get("max_hp", 1))
+		if mhp > 0 and float(hp) / float(mhp) < 0.30:
+			any_room_critical = true
+			break
+	if any_room_critical:
+		colony.auto_escalate("repair")
+	else:
+		colony.auto_restore("repair")
+
+
+func _try_auto_repair() -> void:
+	# When repair priority is >= normal, automatically queue REPAIR jobs for any
+	# damaged room that doesn't already have one. Player no longer has to spot
+	# damage and place markers manually.
+	var priority: String = String(GameManager.colony.priorities.get("repair", "normal"))
+	if priority == "low":
+		return
+	for room_id in GameManager.room_manager._rooms:
+		var room: Dictionary = GameManager.room_manager._rooms[room_id]
+		var hp: int = int(room.get("hp", 0))
+		var max_hp: int = int(room.get("max_hp", 1))
+		if hp >= max_hp:
+			continue
+		var tile: Vector2i = Vector2i(room.get("tile_pos", Vector2i.ZERO))
+		if GameManager.job_queue.has_job(JobQueue.TYPE_REPAIR, tile):
+			continue
+		GameManager.job_queue.add_job(JobQueue.TYPE_REPAIR, tile)
 
 
 # ── Auto-build ─────────────────────────────────────────────────────────────────

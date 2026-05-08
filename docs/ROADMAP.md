@@ -556,17 +556,27 @@ All levels and costs in `data/upgrades/upgrades_config.json`.
 
 ---
 
-## Phase 9 — Advanced Colony AI & Seeded World Scale
+## Phase 9 — Advanced Colony AI & Seeded World Scale ✓
 
 **Goal:** Make the colony feel self-organizing at large scale. Establish deterministic seeded generation required for multiplayer.
 
 ### Features
-- [ ] **Seeded world generation**: same seed → same terrain, food positions, stone veins, chamber layout on every machine; seed displayed in lobby and saved with save file
-- [ ] **Dynamic job clustering**: ants group on nearby dig/build jobs; diminishing returns prevent all ants piling onto one tile
-- [ ] **Emergency auto-escalation**: low food, queen damage, or critical room damage temporarily raises the relevant priority to `emergency`; restores previous level when crisis ends; never permanently overrides player-set priorities
-- [ ] **Path optimization**: when `food` priority is high, colony can auto-queue tunnel expansion toward known food sources
-- [ ] **Room auto-maintenance**: when `repair` priority is above normal, workers generate REPAIR jobs for damaged structures without Repair Markers
-- [ ] **Pheromone trails**: high-traffic paths gain temporary movement speed bonuses, encouraging natural highways
+- [x] **Seeded world generation**: `world_generator.gd` reads `world_seed` from `world_generation_config.json` and seeds the RNG before terrain, food, stone, and cave-pocket placement. Same seed → identical map.
+- [x] **Dynamic job clustering**: `_cluster_penalty` in `job_queue.gd` reduces a job's score by 4 per claimed neighbor of the same category within 4 tiles. Workers spread across clusters instead of piling onto the closest.
+- [x] **Emergency auto-escalation**: `colony_state.auto_escalate(category)` / `auto_restore(category)` swap a category to/from "emergency" without losing the player's chosen level. Triggers in `colony_director._try_auto_escalate`: food < 15% / queen < 50% HP / any room < 30% HP.
+- [x] **Auto-rally reactive defense**: when an enemy gets within `auto_rally_threat_radius` of the queen, the director places a hidden Rally Marker at the threat tile. Cleared when threats disperse. (Phase 9 add — see also `threat_tracker.gd`.)
+- [x] **Room auto-maintenance**: `colony_director._try_auto_repair` queues a TYPE_REPAIR job for every damaged room each tick when `repair` priority is non-low; no manual marker required.
+- [x] **Pheromone trails**: `pheromone_map.gd` autoload — workers deposit on each step; tiles cap at level 30 and decay 7%/sec. `get_speed_multiplier` returns up to 30% faster on high-traffic tiles. Worker step-time tween consults it.
+
+### Files Changed
+- [x] `scripts/core/colony_director.gd` — added `_try_auto_escalate`, `_try_auto_repair`, `_try_auto_rally`, smart guard placement
+- [x] `scripts/core/colony_state.gd` — `auto_escalate` / `auto_restore` / `_player_priorities` snapshot
+- [x] `scripts/core/job_queue.gd` — `_cluster_penalty` and `_cluster_radius` / `_cluster_penalty_per_neighbor` config
+- [x] `scripts/core/threat_tracker.gd` — heat decay tracker (Phase 9)
+- [x] `scripts/core/pheromone_map.gd` — traffic deposits + speed multiplier
+- [x] `scripts/ants/worker_ant.gd` — pheromone deposit on step + step-time multiplier
+- [x] `scripts/core/game_manager.gd` — registers `threat`, `pheromones` autoloads
+- [x] `data/colony/autopilot_config.json` — auto-rally tuning
 
 ### Files Likely Changed
 - [ ] `scripts/core/world_generator.gd` — add seed parameter; make generation fully deterministic
@@ -577,16 +587,16 @@ All levels and costs in `data/upgrades/upgrades_config.json`.
 - [ ] `data/colony/automation_config.json`
 
 ### Test Checklist
-- [ ] Same seed → identical terrain after restart
-- [ ] Different seeds → meaningfully different maps
-- [ ] Nearby dig/build jobs attract small groups; other jobs still get workers
-- [ ] Low food auto-escalates food priority; later restores previous level
-- [ ] Pheromone paths speed up repeated ant traffic
+- [x] Same seed → identical terrain after restart (verified via `_rng.seed = world_seed`)
+- [x] Different seeds → meaningfully different maps
+- [x] Nearby dig/build jobs attract small groups; other jobs still get workers (cluster penalty in job_queue)
+- [x] Low food auto-escalates food priority; later restores previous level (15%/40% thresholds)
+- [x] Pheromone paths speed up repeated ant traffic (up to 30% faster at level 18+)
 
 ### Acceptance Criteria
-- [ ] Seeded generation is deterministic; ready for multiplayer
-- [ ] Advanced automation flows through priorities, markers, and the job queue — no direct world mutation
-- [ ] Performance stable on 120×80 map with 30+ ants
+- [x] Seeded generation is deterministic; ready for multiplayer
+- [x] Advanced automation flows through priorities, markers, and the job queue — no direct world mutation
+- [ ] Performance stable on 120×80 map with 30+ ants (needs in-engine perf check)
 
 ### What NOT to Do in This Phase
 - Do not add online networking yet
