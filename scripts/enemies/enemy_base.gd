@@ -6,6 +6,9 @@ const DIRS: Array = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0
 const ENEMY_GROUP: String = "enemies"
 const SOLDIER_GROUP: String = "soldiers"
 const WORKER_GROUP: String = "workers"
+const WORKER_CHASE_RADIUS: int = 6
+# Throttle group scans — they're O(group_size) and were running per-frame.
+const TARGET_SCAN_INTERVAL: float = 0.25
 
 # Stats — overridden from JSON
 var _max_hp: int = 18
@@ -24,6 +27,9 @@ var _is_moving: bool = false
 var _is_digging: bool = false
 var _move_tween: Tween
 var _think_cooldown: float = 0.0
+# Throttled targeting: cached + refreshed every TARGET_SCAN_INTERVAL.
+var _target_scan_timer: float = 0.0
+var _cached_chase_target: Node2D = null
 
 # World
 var _tile_map: TileMapLayer = null
@@ -117,31 +123,99 @@ func _process(delta: float) -> void:
 		_attack_cooldown_remaining = maxf(0.0, _attack_cooldown_remaining - delta)
 	if _think_cooldown > 0.0:
 		_think_cooldown = maxf(0.0, _think_cooldown - delta)
+	_target_scan_timer -= delta
+	if _target_scan_timer <= 0.0:
+		_target_scan_timer = TARGET_SCAN_INTERVAL
+		_refresh_chase_target()
 	_update_state(delta)
+
+
+func _refresh_chase_target() -> void:
+	# Pick the nearest worker within chase radius. Soldiers are handled inline
+	# because adjacent-soldier always wins regardless of cache.
+	var workers: Array = get_tree().get_nodes_in_group(WORKER_GROUP)
+	var best: Node2D = null
+	var best_dist: int = WORKER_CHASE_RADIUS + 1
+	for w in workers:
+		if not is_instance_valid(w):
+			continue
+		var wt: Vector2i = _world_to_tile(w.global_position)
+		var dist: int = _manhattan(_tile_pos, wt)
+		if dist <= WORKER_CHASE_RADIUS and dist < best_dist:
+			best_dist = dist
+			best = w
+	_cached_chase_target = best
 
 
 func _update_state(_delta: float) -> void:
 	if not is_instance_valid(_tile_map):
 		return
-	# Priority 1: attack adjacent soldier first.
+
+	# Priority 1: damage the room we're standing on. Rooms occupy tunnel tiles,
+	# so an enemy walking through a tunnel passes ON TOP of the room — not just
+	# adjacent. Without this, enemies could stroll past a Nursery untouched.
+	var room_under: Dictionary = GameManager.room_manager.get_room_at(_tile_pos)
+	if not room_under.is_empty() and String(room_under.get("type", "")) != "queen_chamber":
+		_attack_room_at_if_ready(_tile_pos)
+		return
+
+	# Priority 2: attack an adjacent soldier (biggest threat).
 	var adjacent_soldier: Node2D = _find_adjacent_soldier()
 	if adjacent_soldier != null:
 		_attack_target_if_ready(adjacent_soldier)
 		return
+
+	# Priority 3: bite the queen if we're at the chamber.
 	if _is_adjacent_to_queen():
 		_attack_queen_if_ready()
 		return
-	# Priority 2: damage any adjacent built room (nursery, food storage, etc.).
+
+	# Priority 4: attack adjacent worker. Workers used to be ignored — they
+	# carry food and fuel the colony, so killing them slows growth.
+	var adjacent_worker: Node2D = _find_adjacent_worker()
+	if adjacent_worker != null:
+		_attack_target_if_ready(adjacent_worker)
+		return
+
+	# Priority 5: damage any adjacent built room.
 	var damaged_room_tile: Vector2i = _find_adjacent_damageable_room()
 	if damaged_room_tile != Vector2i(-1, -1):
 		_attack_room_if_ready(damaged_room_tile)
 		return
-	# Priority 3: move closer to queen via straight-line greedy step.
+
+	# Priority 6: chase a nearby worker if we have one cached.
+	if _cached_chase_target != null and is_instance_valid(_cached_chase_target):
+		if _is_moving:
+			return
+		if _think_cooldown > 0.0:
+			return
+		_take_step_toward(_world_to_tile(_cached_chase_target.global_position))
+		return
+
+	# Priority 7: walk/dig toward the queen.
 	if _is_moving:
 		return
 	if _think_cooldown > 0.0:
 		return
-	_take_step_toward_queen()
+	_take_step_toward(_queen_tile)
+
+
+func _find_adjacent_worker() -> Node2D:
+	var workers: Array = get_tree().get_nodes_in_group(WORKER_GROUP)
+	for w in workers:
+		if not is_instance_valid(w):
+			continue
+		var wt: Vector2i = _world_to_tile(w.global_position)
+		if _manhattan(_tile_pos, wt) == 1:
+			return w
+	return null
+
+
+func _attack_room_at_if_ready(room_tile: Vector2i) -> void:
+	if _attack_cooldown_remaining > 0.0:
+		return
+	GameManager.room_manager.damage_room_at(room_tile, _damage)
+	_attack_cooldown_remaining = _attack_cooldown
 
 
 func _find_adjacent_damageable_room() -> Vector2i:
@@ -160,18 +234,13 @@ func _attack_room_if_ready(room_tile: Vector2i) -> void:
 	_attack_cooldown_remaining = _attack_cooldown
 
 
-func _take_step_toward_queen() -> void:
-	# Order of preference, queen-direction first:
-	#   1. Walk queen-direction if traversable.
-	#   2. Dig queen-direction if it's dirt.
-	#   3. Walk sideways toward queen (perpendicular axis).
-	#   4. Dig sideways through dirt.
-	#   5. Walk any remaining direction (don't get stuck).
-	# This prevents enemies from wandering sky/tunnels horizontally while
-	# the queen is one dirt tile away below them.
-	var primary: Array = _queen_direction_steps()
+func _take_step_toward(target: Vector2i) -> void:
+	# Generic version of "head that way": walks if it can, digs through dirt
+	# if walking is blocked, only walks sideways as a last resort.
+	# Used for queen pathing AND for chasing nearby workers.
+	var primary: Array = _direction_steps_toward(target)
 
-	# 1 & 2: prioritized queen-direction steps — walk first, then dig.
+	# 1 & 2: prioritized target-direction steps — walk first, then dig.
 	for step in primary:
 		var n: Vector2i = _tile_pos + step
 		if _is_traversable(n):
@@ -203,13 +272,12 @@ func _take_step_toward_queen() -> void:
 	_think_cooldown = 0.6
 
 
-func _queen_direction_steps() -> Array:
-	# Returns the up-to-2 directional steps that point toward the queen,
-	# longer-axis first (e.g. queen far below and slightly right → [(0,1), (1,0)]).
-	var dx: int = sign(_queen_tile.x - _tile_pos.x)
-	var dy: int = sign(_queen_tile.y - _tile_pos.y)
+func _direction_steps_toward(target: Vector2i) -> Array:
+	# Returns up-to-2 directional steps pointing at the target, longer-axis first.
+	var dx: int = sign(target.x - _tile_pos.x)
+	var dy: int = sign(target.y - _tile_pos.y)
 	var steps: Array = []
-	if abs(_queen_tile.x - _tile_pos.x) >= abs(_queen_tile.y - _tile_pos.y):
+	if abs(target.x - _tile_pos.x) >= abs(target.y - _tile_pos.y):
 		if dx != 0:
 			steps.append(Vector2i(dx, 0))
 		if dy != 0:

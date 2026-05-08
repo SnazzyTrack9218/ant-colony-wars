@@ -303,15 +303,23 @@ func _find_buildable_tunnel_tile() -> Vector2i:
 	if candidates.is_empty():
 		return Vector2i(-1, -1)
 
-	# Score each candidate; lower is better.
-	var best: Vector2i = candidates[0]
+	# Score each candidate; lower is better. Then pick randomly among the top
+	# tier so the director doesn't keep cramming rooms into the same alcove.
+	var scored: Array = []
 	var best_score: float = INF
 	for tile in candidates:
 		var score: float = _score_room_tile(tile)
+		scored.append({"tile": tile, "score": score})
 		if score < best_score:
 			best_score = score
-			best = tile
-	return best
+	# Eligible: anything within 5 score-units of best.
+	var eligible: Array = []
+	for entry in scored:
+		if float(entry["score"]) <= best_score + 5.0:
+			eligible.append(entry["tile"])
+	if eligible.is_empty():
+		return Vector2i(-1, -1)
+	return eligible[randi() % eligible.size()]
 
 
 func _score_room_tile(tile: Vector2i) -> float:

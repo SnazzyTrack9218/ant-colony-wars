@@ -120,14 +120,25 @@ Read `docs/AUTONOMY_DESIGN.md` before writing any ant or job code.
 
 ---
 
-## NEXT — Phase 10: Local Multiplayer Prototype
+## NEXT — Phase 10: Local Multiplayer Prototype (4-player, 4 corners)
 
-- [ ] Split-screen two colonies on shared TileMap
-- [ ] Seed selection UI for local matches
-- [ ] colony_id parameter on all GameManager command functions
-- [ ] Two-colony state (separate food, workers, soldiers, queens)
-- [ ] Soldiers attack ants from the other colony
-- [ ] Queen death ends game and declares winner
+Design:
+- 4 queens, one in each corner (NW / NE / SW / SE) of a much bigger map (target 320×200).
+- Each player owns a colony with its own food, workers, soldiers, upgrades, autopilot.
+- Shared seeded TileMap; everyone sees everything (fog-of-war is a Phase 11+ concern).
+- Soldiers from colony A attack ants from B/C/D and vice versa.
+- Last queen standing wins.
+
+Tasks:
+- [ ] Multi-tile rooms: Nursery 2×2, Food Storage 2×2, Mushroom Farm 3×3, Barracks 2×3, Guard Post 1×1. Worker BUILD job needs to clear/claim a footprint of tiles, not one tile.
+- [ ] Refactor colony_state to be instanceable per-colony (not autoload singleton).
+- [ ] colony_id parameter on register_worker / register_soldier / add_food / spend_food / damage_queen / set_priority.
+- [ ] Director, threat tracker, pheromone map per-colony.
+- [ ] Worker / soldier / enemy track which colony_id they belong to; soldiers attack ants whose colony_id != theirs.
+- [ ] Bigger world (320×200 with 4 corner queen chambers placed by world generator).
+- [ ] Player camera focuses on its own queen at start; can pan freely.
+- [ ] Lobby/setup screen: pick number of human players (1–4), seed, AI fill-ins for empty slots.
+- [ ] Game-over screen shows surviving colony as winner.
 
 ---
 

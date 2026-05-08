@@ -4,6 +4,8 @@ const TILE_SIZE: int = 16
 const DIRS: Array = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const ENEMY_GROUP: String = "enemies"
 const SOLDIER_GROUP: String = "soldiers"
+# Throttle the per-frame enemy scan; was the perf hotspot at high ant counts.
+const ENEMY_SCAN_INTERVAL: float = 0.2
 
 enum State { IDLE_PATROL, ENGAGE, RETURN, MOVE_TO_RALLY, AT_RALLY }
 
@@ -26,6 +28,9 @@ var _attack_cooldown_remaining: float = 0.0
 var _patrol_anchor: Vector2i = Vector2i.ZERO
 var _current_target: Node2D = null
 var _current_rally_job = null
+# Throttled cached nearest enemy.
+var _enemy_scan_timer: float = 0.0
+var _cached_nearest_enemy: Node2D = null
 
 # World references
 var _tile_map: TileMapLayer
@@ -112,6 +117,10 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	if _attack_cooldown_remaining > 0.0:
 		_attack_cooldown_remaining = maxf(0.0, _attack_cooldown_remaining - delta)
+	_enemy_scan_timer -= delta
+	if _enemy_scan_timer <= 0.0:
+		_enemy_scan_timer = ENEMY_SCAN_INTERVAL
+		_cached_nearest_enemy = _find_nearest_enemy()
 	_update_state(delta)
 
 
@@ -120,8 +129,8 @@ func _process(delta: float) -> void:
 func _update_state(_delta: float) -> void:
 	if not is_instance_valid(_tile_map):
 		return
-	# Detect threats every tick regardless of current state (except at rally hold).
-	var nearest: Node2D = _find_nearest_enemy()
+	# Use the cached nearest enemy (refreshed every ENEMY_SCAN_INTERVAL).
+	var nearest: Node2D = _cached_nearest_enemy
 	if nearest != null and _can_engage(nearest):
 		_set_target(nearest)
 		if _state != State.ENGAGE:

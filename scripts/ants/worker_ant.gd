@@ -6,9 +6,12 @@ const WORKER_JOB_TYPES: Array = [JobQueue.TYPE_DIG, JobQueue.TYPE_GATHER, JobQue
 const WORKER_JOB_CATEGORIES: Array[String] = ["digging", "food", "building", "repair"]
 const FOOD_ROUTE_PURPOSE: String = "food_route"
 const DIRS: Array = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+const WORKER_GROUP: String = "workers"
 const ENEMY_GROUP: String = "enemies"
 const FLEE_DANGER_RADIUS: int = 2
 const FLEE_SAFE_RADIUS: int = 4
+# Throttle the per-frame enemy distance scan — was O(workers × enemies) every frame.
+const ENEMY_SCAN_INTERVAL: float = 0.2
 
 enum State { IDLE, MOVING, WORKING, IDLE_WANDER, FLEE }
 
@@ -20,11 +23,19 @@ var _build_duration: float = 0.9
 var _food_per_gather: int = 1
 var _wander_delay: float = 0.35
 var _sprite_max_size: float = 12.0
+var _max_hp: int = 12
 var _auto_gather_enabled: bool = true
 var _auto_explore_enabled: bool = true
 var _auto_explore_candidate_limit: int = 24
 var _auto_food_route_enabled: bool = true
 var _auto_food_route_food_ratio: float = 0.35
+
+# HP
+var _hp: int = 12
+# Throttled enemy distance — refreshed every ENEMY_SCAN_INTERVAL.
+var _enemy_scan_timer: float = 0.0
+var _cached_nearest_enemy_dist: int = 100000
+var _cached_nearest_enemy_tile: Vector2i = Vector2i(-1, -1)
 
 # FSM
 var _state: State = State.IDLE
@@ -47,6 +58,8 @@ var _tile_pos: Vector2i = Vector2i.ZERO
 var _food_positions: Array = []
 
 @onready var _sprite: Sprite2D = $Sprite2D
+@onready var _hp_bar_bg: ColorRect = get_node_or_null("HpBarBg")
+@onready var _hp_bar_fill: ColorRect = get_node_or_null("HpBarFill")
 
 
 func _ready() -> void:
@@ -86,7 +99,10 @@ func setup(
 	_food_positions = food_positions.duplicate()
 	position = _tile_to_world(start_tile)
 	_load_config()
+	_hp = _max_hp
+	_update_hp_bar()
 	_fit_sprite_to_tile()
+	add_to_group(WORKER_GROUP)
 	GameManager.register_worker()
 	GameManager.priority_changed.connect(_on_priority_changed)
 	if GameManager.upgrades != null:
@@ -136,6 +152,7 @@ func _load_config() -> void:
 	_food_per_gather = int(data.get("food_per_gather", _food_per_gather))
 	_wander_delay = float(data.get("wander_delay", _wander_delay))
 	_sprite_max_size = float(data.get("sprite_max_size", _sprite_max_size))
+	_max_hp = int(data.get("max_hp", _max_hp))
 	_auto_gather_enabled = bool(data.get("auto_gather_enabled", _auto_gather_enabled))
 	_auto_explore_enabled = bool(data.get("auto_explore_enabled", _auto_explore_enabled))
 	_auto_explore_candidate_limit = maxi(
@@ -154,36 +171,67 @@ func _exit_tree() -> void:
 	GameManager.unregister_worker()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not is_instance_valid(_tile_map):
 		return
-	# Flee check runs every tick regardless of state.
-	var nearest_enemy_dist: int = _nearest_enemy_distance()
+	# Throttle the enemy scan — was the per-frame O(N) hotspot at 30+ ants.
+	_enemy_scan_timer -= delta
+	if _enemy_scan_timer <= 0.0:
+		_enemy_scan_timer = ENEMY_SCAN_INTERVAL
+		_refresh_nearest_enemy()
 	if _state == State.FLEE:
-		if nearest_enemy_dist > FLEE_SAFE_RADIUS:
+		if _cached_nearest_enemy_dist > FLEE_SAFE_RADIUS:
 			# All clear — return to idle and re-score work.
 			_state = State.IDLE
 			_enter_idle()
 			return
 		_flee_tick()
 		return
-	if nearest_enemy_dist <= FLEE_DANGER_RADIUS:
+	if _cached_nearest_enemy_dist <= FLEE_DANGER_RADIUS:
 		_enter_flee()
 
 
-func _nearest_enemy_distance() -> int:
+func _refresh_nearest_enemy() -> void:
 	var enemies: Array = get_tree().get_nodes_in_group(ENEMY_GROUP)
-	if enemies.is_empty():
-		return 100000
-	var best: int = 100000
+	var best_dist: int = 100000
+	var best_tile: Vector2i = Vector2i(-1, -1)
 	for e in enemies:
 		if not is_instance_valid(e):
 			continue
 		var et: Vector2i = Vector2i(int(e.global_position.x / TILE_SIZE), int(e.global_position.y / TILE_SIZE))
 		var d: int = abs(et.x - _tile_pos.x) + abs(et.y - _tile_pos.y)
-		if d < best:
-			best = d
-	return best
+		if d < best_dist:
+			best_dist = d
+			best_tile = et
+	_cached_nearest_enemy_dist = best_dist
+	_cached_nearest_enemy_tile = best_tile
+
+
+# ── HP / damage ───────────────────────────────────────────────────────────────
+
+func take_damage(amount: int) -> void:
+	if amount <= 0:
+		return
+	_hp = maxi(0, _hp - amount)
+	_update_hp_bar()
+	if _hp == 0:
+		_die()
+
+
+func _die() -> void:
+	if is_instance_valid(_move_tween):
+		_move_tween.kill()
+	if _current_job != null:
+		GameManager.job_queue.release_job(_current_job.id)
+		_current_job = null
+	queue_free()
+
+
+func _update_hp_bar() -> void:
+	if _hp_bar_bg == null or _hp_bar_fill == null:
+		return
+	var ratio: float = 0.0 if _max_hp <= 0 else clampf(float(_hp) / float(_max_hp), 0.0, 1.0)
+	_hp_bar_fill.size.x = _hp_bar_bg.size.x * ratio
 
 
 func _enter_flee() -> void:
@@ -201,8 +249,8 @@ func _enter_flee() -> void:
 func _flee_tick() -> void:
 	if _is_moving:
 		return
-	# Step away from the nearest enemy.
-	var enemy_pos: Vector2i = _nearest_enemy_tile()
+	# Use the cached nearest enemy from _refresh_nearest_enemy.
+	var enemy_pos: Vector2i = _cached_nearest_enemy_tile
 	if enemy_pos == Vector2i(-1, -1):
 		_state = State.IDLE
 		_enter_idle()
@@ -223,21 +271,6 @@ func _flee_tick() -> void:
 		return
 	_path = [_tile_pos + best_step]
 	_move_step()
-
-
-func _nearest_enemy_tile() -> Vector2i:
-	var enemies: Array = get_tree().get_nodes_in_group(ENEMY_GROUP)
-	var best_tile: Vector2i = Vector2i(-1, -1)
-	var best_dist: int = 100000
-	for e in enemies:
-		if not is_instance_valid(e):
-			continue
-		var et: Vector2i = Vector2i(int(e.global_position.x / TILE_SIZE), int(e.global_position.y / TILE_SIZE))
-		var d: int = abs(et.x - _tile_pos.x) + abs(et.y - _tile_pos.y)
-		if d < best_dist:
-			best_dist = d
-			best_tile = et
-	return best_tile
 
 
 # ── FSM ───────────────────────────────────────────────────────────────────────

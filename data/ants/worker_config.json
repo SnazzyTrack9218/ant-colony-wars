@@ -6,6 +6,7 @@
     "food_per_gather": 1,
     "wander_delay": 0.35,
     "sprite_max_size": 12.0,
+    "max_hp": 12,
     "auto_gather_enabled": true,
     "auto_explore_enabled": false,
     "auto_explore_candidate_limit": 8,
